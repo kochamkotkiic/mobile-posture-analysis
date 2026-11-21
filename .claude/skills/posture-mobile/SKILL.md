@@ -61,7 +61,7 @@ Team project (3 people). This file is the shared source of truth for humans and 
 | D1 | **Native Android, Kotlin**, Jetpack Compose UI. **iOS is out of scope**: two of us have iPhones but nobody has a Mac (Xcode, needed to build for iPhone, is macOS-only). Kotlin Multiplatform / Flutter / React Native rejected: all need a Mac for iOS too, and the course is taught in Kotlin. | Decided |
 | D2 | Pose detection runs **on the phone** (MediaPipe). Images/video are **never** sent to the cloud or edge; only the 9 landmark numbers. | Decided |
 | D3 | Where the good/bad classification runs: **on-device by default** (`LocalOnnxClassifier`, works offline, ~1 ms). A **cloud mode** (`RemoteClassifier` → Nuno's `/predict`) is built too, switchable in the app, used for the **on-device vs cloud comparison** required by the course. Later the same `RemoteClassifier` can point at the PC (edge mode, D8). Friend's 5 s task verification: on-device or cloud still **open**. | Decided (friend part open) |
-| D4 | Model format on the phone: **ONNX** (scaler + RandomForest exported together with `skl2onnx`), run with ONNX Runtime Android. The same `.onnx` file is what the cloud stores and serves. (LiteRT is for neural networks and can't run a scikit-learn RandomForest directly.) | Proposed |
+| D4 | Model format on the phone: **ONNX** (scaler + RandomForest exported together with `skl2onnx`), run with ONNX Runtime Android. The same `.onnx` file is what the cloud stores and serves. (LiteRT is for neural networks and can't run a scikit-learn RandomForest directly.)"ONNX Runtime 1.25.1 on Android (1.26/1.27 give wrong results). Decide from probabilities, not label. | Proposed |
 | D5 | MVP scope for Emilia: calibration + monitoring + red "Bad posture" sign at 3 s + 10-minute alert, with a **minimal UI just for testing**. **Not now:** profile list, avatars/GIF, sessions/statistics, overlay, polished UI (Zenon). | Decided |
 | D6 | **Two-level feedback.** (1) Bad posture ≥ 3 s → red "Bad posture" sign on screen only, **no vibration/sound**. (2) **10 min of continuous bad posture** → alert (MVP: simple on-screen alert dialog; later this event may also notify the friend). The alert fires **once per bad episode**; the 10-min timer resets as soon as posture is good again. | Decided |
 | D7 | **Keep the ≈ 6 s delay** (≈ 2.8 s smoothing + 3 s timer), same as desktop. The smoothing filters short movements (reaching for a cup, looking at notes). Don't shrink the smoothing window. | Decided |
@@ -112,7 +112,7 @@ Values are MediaPipe **normalized** landmarks (x, y in 0..1 of the image width/h
 - Webcam frames were 4:3 (640×480). Request a **4:3** analysis resolution on Android (x/y are fractions of
   width/height, so the aspect ratio changes the scale of movements).
 
-- Verified (Step 0.3, testp6): Tasks PoseLandmarker + mirroring = 88.27% smoothed accuracy (legacy 88.43%). 
+Verified (Step 0.3, testp6, upright frames): Tasks PoseLandmarker + mirroring = 89.69% smoothed accuracy (legacy 89.45%). testp6 is stored upside down; OpenCV ignores the rotation, see PROGRESS.md P9.
 Without mirroring, Tasks drops to 82.31%. The old test-video evaluation (evaluate_external_test.py) 
  did not mirror, unlike training and the live app.
 ### 5.3 Pose model settings
@@ -344,8 +344,8 @@ sealed interface PostureEvent {
 - [x] Platform decided: native Android only, teammates use the emulator (D1, D9)
 - [x] Architecture decided: 2-tier first, 3-tier optional (D8)
 - [x] Step 0: ONNX export + equality check + PoseLandmarker comparison
-- [ ] Step 1: Android project
-- [ ] Step 2: Camera + pose
+- [x] Step 1: Android project
+- [x] Step 2: Camera + pose
 - [ ] Step 3: Logic + unit tests
 - [ ] Step 4: Calibration
 - [ ] Step 5: Monitoring + alert

@@ -1,0 +1,95 @@
+# ============================================
+# 🔴 VIRTUAL ENVIRONMENTS
+# ============================================
+.venv/
+venv/
+env/
+ENV/
+
+# ============================================
+# 🔴 PYTHON JUNK
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ============================================
+# 🔴 JUPYTER NOTEBOOK JUNK
+# ============================================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+*.ipynb_checkpoints/
+.jupyter/
+
+# ============================================
+# 🔴 LARGE FILES - RECORDINGS AND FRAMES
+# ============================================
+data/raw_frames/
+data/sessions
+data/raw_video/
+*.mp4
+*.avi
+*.mov
+*.flv
+
+# ============================================
+# 🔴 MODELS AND CACHES (IF REGENERABLE)
+# ============================================
+models/scaler.pkl
+models/*.h5
+models/*.pt
+
+# ============================================
+# 🔴 ANALYSIS CSVs (TEMPORARY RESULTS)
+# ============================================
+wyniki_z_klatek.csv
+*.csv
+
+# ============================================
+# 🔴 EDITORS AND IDEs
+# ============================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============================================
+# 🔴 NODE.JS / FRONTEND
+# ============================================
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# ============================================
+# 🔴 LOCAL CONFIGS
+# ============================================
+.env
+.env.local
+config_local.json
+
+# ============================================
+# 🔴 LOGS
+# ============================================
+*.log
+logs/

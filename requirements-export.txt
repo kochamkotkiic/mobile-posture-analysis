@@ -1,0 +1,6 @@
+# Extra packages for Step 0 (src/export/*). Install on top of requirements.txt:
+#   pip install -r requirements.txt -r requirements-export.txt
+# onnx is pinned to 1.17.0 on purpose: newer onnx needs protobuf 5+, but mediapipe 0.10.21 needs protobuf 4.x.
+skl2onnx==1.20.0
+onnx==1.17.0
+onnxruntime==1.32.0

@@ -1,0 +1,333 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Poppins', sans-serif;
+}
+
+@keyframes pulse-bar {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes avatar-bad-pulse {
+    0%, 100% {
+        filter: drop-shadow(0 0 5px rgba(255, 51, 102, 0.4));
+        background: rgba(0, 0, 0, 0.25);
+    }
+    50% {
+        filter: drop-shadow(0 0 32px rgba(255, 51, 102, 1)) drop-shadow(0 0 16px rgba(255, 0, 50, 1));
+        background: rgba(255, 30, 80, 0.45);
+    }
+}
+
+body {
+    background-color: rgba(20, 20, 25, 0.90); /* Nice, subtle transparency */
+    color: #ffffff;
+    overflow: hidden;
+    border-radius: 15px; /* The window gets rounded corners! */
+    border: 1px solid #333;
+}
+
+/* Bar for dragging the window */
+.drag-bar {
+    -webkit-app-region: drag; /* Magic property: lets you drag the window with the mouse! */
+    height: 35px;
+    background: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%);
+    display: flex;
+    align-items: center;
+    padding-left: 15px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+}
+
+.container {
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: calc(100vh - 35px);
+    overflow: hidden;
+}
+.status-panel {
+    text-align: center;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 25px;
+    border-radius: 20px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.cat-avatar {
+    font-size: 70px;
+    margin-bottom: 5px;
+    filter: drop-shadow(0px 0px 15px rgba(0, 255, 120, 0.5));
+}
+
+h1 {
+    font-size: 26px;
+    color: #00ff78; /* Glowing neon green */
+    margin-bottom: 5px;
+    text-shadow: 0px 0px 10px rgba(0, 255, 120, 0.4);
+}
+
+p {
+    color: #aaa;
+    font-size: 13px;
+    margin-bottom: 15px;
+}
+
+.progress-bar-bg {
+    width: 100%;
+    height: 10px;
+    background: #222;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.progress-bar-fill {
+    width: 15%; /* Show a bit of the bar at the start */
+    height: 100%;
+    background: #ff3366;
+    box-shadow: 0px 0px 10px #ff3366;
+    transition: width 0.3s;
+}
+
+.alert-text {
+    color: #ff3366;
+    font-weight: 600;
+    margin-bottom: 0;
+}
+
+.controls {
+    display: flex;
+    gap: 15px;
+    width: 100%;
+}
+
+button {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 10px;
+    background: #333;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-app-region: no-drag; /* Important so the buttons stay clickable */
+}
+
+button:hover {
+    background: #444;
+    transform: translateY(-2px);
+}
+
+#btn-overlay {
+    background: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%);
+}
+
+#btn-overlay:hover {
+    box-shadow: 0px 0px 15px rgba(37, 117, 252, 0.5);
+}
+/* --- NEW ADDITIONS AT THE BOTTOM OF THE FILE --- */
+.draggable-body {
+    -webkit-app-region: drag; /* Lets you grab and move the window by its background */
+}
+
+#cat-avatar {
+    -webkit-app-region: no-drag; /* Very important: without this you could not click the cat! */
+    cursor: pointer;
+    transition: transform 0.2s;
+    font-size: 80px;
+    margin-bottom: 15px;
+}
+
+#cat-avatar:hover {
+    transform: scale(1.1); /* The cat grows slightly on mouse hover */
+}
+.draggable-body {
+    -webkit-app-region: drag;
+}
+.draggable-body .cat-avatar {
+    -webkit-app-region: no-drag; /* keeps the avatar clickable */
+}
+#mini-ui {
+    background: transparent;
+    margin: 6px; /* small margin so you can drag by edges */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+}
+/* ===== MINI MODE - FLOATING CAT ===== */
+#mini-ui {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    background: transparent !important;
+    cursor: grab;
+    -webkit-app-region: drag;
+}
+
+#mini-ui:active {
+    cursor: grabbing;
+}
+
+#cat-avatar {
+    width: 60px;
+    height: 60px;
+    font-size: 40px;
+    cursor: grab;
+    -webkit-app-region: no-drag;
+    margin: 0;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.25) !important;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+    transition: transform 0.15s;
+    user-select: none;
+}
+
+#cat-avatar:hover {
+    transform: scale(1.15);
+}
+
+#cat-avatar:active {
+    cursor: grabbing;
+}
+
+/* In mini mode remove the container padding */
+#mini-ui ~ .container {
+    padding: 0 !important;
+    height: 100vh !important;
+}
+/* ===== PROFILE LIST ===== */
+#profiles-list .profile-row {
+    display: grid;
+    grid-template-columns: 92% 1fr;
+    gap: 8px;
+    width: 100%;
+    align-items: center;
+}
+
+#profiles-list .profile-row button {
+    flex: unset !important;
+    width: 100% !important;
+    transform: none !important;
+    pointer-events: auto !important;
+    cursor: pointer !important;
+}
+
+#profiles-list .profile-row button:hover {
+    transform: none !important;
+}
+#stretch-popup:hover {
+    background: rgba(40,40,50,1) !important; /* Slightly lighter background */
+    transform: translateY(-5px); /* Subtle lift */
+    border-color: #00ff78 !important; /* Change the border color to green */
+}
+
+/* ===== STATISTICS SCREEN ===== */
+#stats-screen {
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+}
+
+#stats-screen::-webkit-scrollbar {
+    width: 6px;
+}
+
+#stats-screen::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#stats-screen::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 3px;
+}
+
+.stats-history-row {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 12px 14px;
+    transition: background 0.2s;
+}
+
+.stats-history-row:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+#btn-stats:hover {
+    background: rgba(0, 255, 120, 0.25) !important;
+    box-shadow: 0 0 12px rgba(0, 255, 120, 0.3);
+}
+
+/* ===== WELCOME BUTTON ===== */
+#btn-welcome-start:hover {
+    background: linear-gradient(90deg, rgba(0, 255, 120, 0.4) 0%, rgba(255, 165, 0, 0.4) 100%) !important;
+    box-shadow: 0 0 15px rgba(0, 255, 120, 0.4);
+    transform: translateY(-2px);
+}
+
+/* ===== AVATAR PICKER ===== */
+.avatar-picker {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.avatar-option {
+    flex: 1;
+    padding: 10px 6px;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+    background: rgba(255, 255, 255, 0.03);
+    -webkit-app-region: no-drag;
+}
+
+.avatar-option:hover {
+    border-color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.avatar-option.selected {
+    border-color: #00ff78;
+    background: rgba(0, 255, 120, 0.1);
+    box-shadow: 0 0 10px rgba(0, 255, 120, 0.2);
+}
+
+.avatar-option-emoji {
+    font-size: 26px;
+    line-height: 1;
+}
+
+.avatar-option-name {
+    font-size: 11px;
+    color: #888;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+
+.avatar-option.selected .avatar-option-name {
+    color: #00ff78;
+}

@@ -93,13 +93,21 @@ def make_pose(kind, conf):
 
 
 # ── Pipeline (same logic as evaluate_external_test.py) ────────────────────────────────────────────
+ROTATE = {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
+UPRIGHT_ROTATION = 0  # set in main() from the video's rotation metadata
+
+
 def frames(cap, mirror, start_frame=0, max_frames=None):
+    """Yields RGB frames like the app sees them: rotated upright first, then (optionally) mirrored.
+    OpenCV 4.8 does NOT apply the rotation stored in phone videos (testp6 is stored upside down)."""
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     n = 0
     while max_frames is None or n < max_frames:
         ok, frame = cap.read()
         if not ok:
             return
+        if UPRIGHT_ROTATION in ROTATE:
+            frame = cv2.rotate(frame, ROTATE[UPRIGHT_ROTATION])
         if mirror:
             frame = cv2.flip(frame, 1)
         n += 1
@@ -191,6 +199,9 @@ def main():
     ap.add_argument("--calib-start", type=float, default=0.0, help="second where calibration starts")
     ap.add_argument("--pose", choices=["legacy", "tasks"], nargs="+", default=["legacy", "tasks"])
     ap.add_argument("--mirror", choices=["no", "yes"], nargs="+", default=["no", "yes"])
+    ap.add_argument("--no-autorotate", action="store_true",
+                    help="ignore the video's rotation metadata (reproduces the old, upside-down evaluation)")
+    ap.add_argument("--tag", default="", help="suffix for output file names")
     args = ap.parse_args()
 
     video_path = os.path.join(TEST_VIDEOS_DIR, f"{args.video}.mp4")
@@ -205,12 +216,17 @@ def main():
     model, scaler = joblib.load(MODEL_PATH), joblib.load(SCALER_PATH)
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    print(f"{args.video}: {int(cap.get(cv2.CAP_PROP_FRAME_COUNT))} frames, {fps:.1f} FPS")
+    cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 0)  # we rotate ourselves, so the behaviour is explicit
+    global UPRIGHT_ROTATION
+    meta = int(cap.get(cv2.CAP_PROP_ORIENTATION_META)) % 360
+    UPRIGHT_ROTATION = 0 if args.no_autorotate else meta
+    print(f"{args.video}: {int(cap.get(cv2.CAP_PROP_FRAME_COUNT))} frames, {fps:.1f} FPS, "
+          f"rotation metadata {meta} deg -> rotating frames by {UPRIGHT_ROTATION} deg")
 
     results = []
     for kind in args.pose:
         for mirror in args.mirror:
-            name = f"{kind}_mirror-{mirror}"
+            name = f"{kind}_mirror-{mirror}{args.tag}"
             print(f"\n== {name} ==")
             calibration, n_samples = calibrate(cap, fps, kind, mirror == "yes", args.calib_start)
             if calibration is None:
@@ -222,14 +238,14 @@ def main():
             raw.to_csv(os.path.join(out_dir, f"landmarks_{name}.csv"), index=False)
             scored = det[(det["prediction"] != -1) & (det["ground_truth"] != -1)]
             visible_pct = (det["prediction"] != -1).mean() * 100
-            m = {"Variant": name, "Calib samples": n_samples, "Person visible %": round(visible_pct, 1),
+            m = {"Variant": name, "Rotation": UPRIGHT_ROTATION, "Calib samples": n_samples, "Person visible %": round(visible_pct, 1),
                  **compute_metrics(scored, fps)}
             print("   ", m)
             results.append(m)
     cap.release()
 
     table = pd.DataFrame(results)
-    out_csv = os.path.join(out_dir, "pose_comparison.csv")
+    out_csv = os.path.join(out_dir, f"pose_comparison{args.tag}.csv")
     table.to_csv(out_csv, index=False)
     pd.set_option("display.width", 200)
     print("\n" + table.to_string(index=False))

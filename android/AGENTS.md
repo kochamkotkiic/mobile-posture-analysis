@@ -11,7 +11,11 @@ Full plan, decisions and team split: `../.claude/skills/posture-mobile/SKILL.md`
   normalized coordinates).
 - Model input = features **minus calibration**. The StandardScaler is **inside** `posture_model.onnx`:
   never scale again in Kotlin.
-- Model output: `label` (0 = good, 1 = bad), `probabilities` = [P(good), P(bad)].
+- Model output: `probabilities` = [P(good), P(bad)]. **Take the decision from the probabilities**
+  (bad = 1 if P(bad) > P(good), else good = 0; same rule as sklearn). Do **not** use the `label` output:
+  ONNX Runtime 1.27 returns it wrong (always 1) for this model.
+- ONNX Runtime version: **1.25.1**. 1.26.x gives wrong probabilities and 1.27.x a wrong `label` for our
+  RandomForest (tested with `posture_model.onnx`). Before upgrading, run the Step 1 self-test.
 - Camera analysis resolution **4:3**, phone in **landscape**.
 - Pose model: `pose_landmarker_full.task`, confidence 0.6 (monitoring) / 0.7 (calibration).
 - Images/video never leave the phone. Only the 9 numbers may be sent to a server.

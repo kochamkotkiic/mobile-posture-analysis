@@ -14,7 +14,7 @@ Rules for coding agents in the Android project: [`android/AGENTS.md`](../android
 | 0 | Python prep: ONNX export, equality check, new pose model check | ✅ done | 2026-11-21 |
 | 1 | Android project + libraries + model files + self-test | ✅ done | 2026-11-21 |
 | 2 | Camera + pose detection | ✅ done | 2026-11-21 |
-| 3 | Posture logic in plain Kotlin + unit tests | ⏳ next | |
+| 3 | Posture logic in plain Kotlin + unit tests | ✅ done | 2026-11-21 |
 | 4 | Calibration | | |
 | 5 | Monitoring screen + alerts | | |
 | 6 | Real test (accuracy, battery, heat) | | |
@@ -188,6 +188,43 @@ the *eyes* (MediaPipe: image → 9 numbers) and the *judge* (scaler + RandomFore
   phone as well as on the PC. Different camera hardware, distance and angle change the size of movements;
   checked end-to-end in Step 6.
 
+### Step 3: Posture logic in plain Kotlin + unit tests (2026-11-21)
+
+**Goal:** turn the 9 numbers per frame into a decision, exactly like the per-frame loop of `server.py`
+(lines 266–354), and prove it with tests that run on a normal computer.
+
+New package `posture/` (plain Kotlin, no Android imports, except ONNX Runtime in `LocalOnnxClassifier`):
+
+| File | What it does | Python original |
+|---|---|---|
+| `PostureContracts.kt` | Team contracts from SKILL.md: `PostureClassifier`, `Prediction` (+ decision from probabilities), `PostureState`, `PostureEvent` | – |
+| `FeatureExtractor.kt` | 33 landmarks → 9 features (nose, left shoulder, right shoulder; x, y, z), feature names = profile keys, shoulder visibility | `extract_features()` |
+| `Calibration.kt` | 9 calibration values, `normalize()` = features − calibration, map with the Python keys (missing key = 0) | `normalize_features()` |
+| `InferenceThrottle.kt` | Classify at most every 200 ms (5 Hz) | `INFERENCE_INTERVAL` |
+| `PostureStateMachine.kt` | Last 20 predictions, bad if ≥ 14; bad timer; sign at 3 s; `LongBadPostureAlert` once after 10 min continuous; `PostureRecovered`; person lost → timers reset, predictions kept | main loop |
+| `LocalOnnxClassifier.kt` | Runs `posture_model.onnx` on one sample, decision from probabilities | `model.predict_proba()` |
+
+Behaviour copied from `server.py`, which matters for the tests:
+- pose detection on every frame, classification at most every 0.2 s, the last label is kept in between;
+- the timers are updated on every frame;
+- when no person is visible the timers reset, but the last 20 predictions are **kept**.
+
+The state machine gets the time as a parameter instead of reading the clock, so tests can simulate 20 minutes
+in milliseconds; the app passes the real time.
+
+**Tests**
+- JVM unit tests (`app/src/test/.../posture/`, run on the PC): 27 tests in `PostureStateMachineTest`,
+  `FeatureAndCalibrationTest`, `PredictionAndThrottleTest`, incl. the SKILL.md scenarios: 13/20 bad → good,
+  14/20 → bad; bad 2.9 s → no sign, 3.1 s → sign; the sign appears 5.8 s after slouching starts (2.8 s smoothing
+  + 3 s); person lost resets timers but keeps predictions; 599 s → no alert, 600 s → exactly one; 20 min → still
+  one; good break → second alert possible; alert needs continuous bad posture.
+- Checked that the tests can fail: with 13 instead of 14 votes, 8 tests fail; if predictions are cleared when
+  the person is lost, the matching test fails.
+- Instrumented test on the phone (`app/src/androidTest/.../posture/LocalOnnxClassifierTest.kt`): same decision
+  and confidence as Python on the 20 cases of `onnx_test_cases.json`.
+- **Result:** all 27 JVM tests pass in Android Studio; `LocalOnnxClassifierTest` passes on the phone
+  (`connectedDebugAndroidTest` on the Samsung SM-A566B, Android 17: BUILD SUCCESSFUL).
+
 ---
 
 ## 4. Problems and how they were solved
@@ -244,6 +281,9 @@ nothing and add network time (to measure in Step 8).
 | `android/app/src/main/java/com/postureguard/camera/*` | 2 | CameraX config + frame analyzer (rotate + mirror) |
 | `android/app/src/main/java/com/postureguard/pose/*` | 2 | Pose data classes + MediaPipe wrapper |
 | `android/app/src/main/java/com/postureguard/ui/posedebug/*` | 2 | Pose debug ViewModel + screen |
+| `android/app/src/main/java/com/postureguard/posture/*` | 3 | Features, calibration, throttle, state machine, ONNX classifier |
+| `android/app/src/test/java/com/postureguard/posture/*` | 3 | JVM unit tests (27) |
+| `android/app/src/androidTest/java/com/postureguard/posture/LocalOnnxClassifierTest.kt` | 3 | ONNX classifier test on the phone |
 | `docs/PROGRESS.md` | – | This report |
 
 ### How to reproduce
@@ -260,8 +300,9 @@ Android: open `android/` in Android Studio → Sync → Run on the phone → pos
 
 ---
 
-## 7. Next: Step 3 (posture logic in plain Kotlin + unit tests)
-- `FeatureExtractor` (9 values, fixed order), `Normalizer` (− calibration), `LocalOnnxClassifier`
-  (decision from probabilities), `PostureStateMachine` (20-sample smoothing, ≥14 bad, 3 s sign, 10 min alert
-  once per episode, reset when the person is lost).
-- JUnit tests on the PC: the 20 ONNX test cases + state machine scenarios with a fake clock (SKILL.md step 3).
+## 7. Next: Step 4 (calibration)
+- Calibration screen: preview + "Sit straight, then press Start" + 5 s progress bar.
+- Collect frames for 5 s with pose confidence 0.7, only where shoulder visibility > 0.6; need ≥ 10 samples;
+  calibration = mean of each of the 9 values (`calibration.py` / `server.py` lines 99–148).
+- Save with DataStore (same keys as the Python profiles); start monitoring if a calibration exists;
+  "Recalibrate" button.

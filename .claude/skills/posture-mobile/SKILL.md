@@ -346,7 +346,7 @@ sealed interface PostureEvent {
 - [x] Step 0: ONNX export + equality check + PoseLandmarker comparison
 - [x] Step 1: Android project
 - [x] Step 2: Camera + pose
-- [ ] Step 3: Logic + unit tests
+- [x] Step 3: Logic + unit tests
 - [ ] Step 4: Calibration
 - [ ] Step 5: Monitoring + alert
 - [ ] Step 6: Real test

@@ -348,7 +348,7 @@ sealed interface PostureEvent {
 - [x] Step 2: Camera + pose
 - [x] Step 3: Logic + unit tests
 - [x] Step 4: Calibration
-- [ ] Step 5: Monitoring + alert
+- [x] Step 5: Monitoring + alert
 - [ ] Step 6: Real test
 - [ ] Step 7: Hand-off to Zenon / Nuno
 - [ ] Step 8: Cloud mode (needs Nuno's `/predict`)

@@ -1,9 +1,5 @@
 package com.postureguard.ui.calibration
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,23 +20,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.postureguard.calibration.CalibrationCollector
 import com.postureguard.calibration.SavedCalibration
 import com.postureguard.ui.common.CameraPreview
 import com.postureguard.ui.common.LandmarkOverlay
+import com.postureguard.ui.common.RequireCameraPermission
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -50,31 +41,14 @@ private val Green = Color(0xFF2E7D32)
 private val Orange = Color(0xFFEF6C00)
 private val Red = Color(0xFFC62828)
 
-/** Step 4: calibration (minimal testing UI; the polished UI is Zenon's). */
+/** Step 4: calibration (minimal testing UI; the polished UI is Zenon's). "Start monitoring" opens Step 5. */
 @Composable
-fun CalibrationScreen(viewModel: CalibrationViewModel, lifecycleOwner: LifecycleOwner, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    var hasCameraPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        )
-    }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        hasCameraPermission = granted
-    }
-    LaunchedEffect(Unit) {
-        if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
-    }
-    if (!hasCameraPermission) {
-        Column(modifier.padding(24.dp)) {
-            Text("PostureGuard needs the camera to see your posture.", style = MaterialTheme.typography.titleMedium)
-            Text("Images stay on this phone and are never uploaded.")
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) { Text("Allow camera") }
-        }
-        return
-    }
-
+fun CalibrationScreen(
+    viewModel: CalibrationViewModel,
+    lifecycleOwner: LifecycleOwner,
+    onStartMonitoring: () -> Unit,
+    modifier: Modifier = Modifier,
+) = RequireCameraPermission(modifier) {
     val state by viewModel.state.collectAsState()
     val aspect = if (state.imageWidth > 0 && state.imageHeight > 0) state.imageWidth.toFloat() / state.imageHeight else 4f / 3f
 
@@ -95,7 +69,7 @@ fun CalibrationScreen(viewModel: CalibrationViewModel, lifecycleOwner: Lifecycle
                 is CalibrationPhase.Ready -> ReadyPanel(state, phase, viewModel)
                 is CalibrationPhase.Countdown -> CountdownPanel(phase)
                 is CalibrationPhase.Collecting -> CollectingPanel(phase)
-                is CalibrationPhase.Calibrated -> CalibratedPanel(state, phase.saved, viewModel)
+                is CalibrationPhase.Calibrated -> CalibratedPanel(state, phase.saved, viewModel, onStartMonitoring)
             }
 
             state.message?.let {
@@ -156,11 +130,17 @@ private fun CollectingPanel(phase: CalibrationPhase.Collecting) {
 }
 
 @Composable
-private fun CalibratedPanel(state: CalibrationUiState, saved: SavedCalibration, viewModel: CalibrationViewModel) {
+private fun CalibratedPanel(
+    state: CalibrationUiState,
+    saved: SavedCalibration,
+    viewModel: CalibrationViewModel,
+    onStartMonitoring: () -> Unit,
+) {
     Text("✅ Calibrated", style = MaterialTheme.typography.titleMedium, color = Green)
     Text("${formatTime(saved.calibratedAtMillis)} · ${saved.sampleCount} frames", style = MaterialTheme.typography.bodySmall)
     Text("Recalibrate whenever you move the phone or the chair.", style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(8.dp))
+    Button(onClick = onStartMonitoring) { Text("Start monitoring") }
     OutlinedButton(onClick = viewModel::recalibrate) { Text("Recalibrate") }
 
     Spacer(Modifier.height(12.dp))

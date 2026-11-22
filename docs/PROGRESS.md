@@ -264,8 +264,7 @@ and then sit back, otherwise the calibration would record them leaning towards t
   visibility ≤ 0.6 ignored; 9 frames → fail, 10 → ok; frame at exactly 5 s still used; Start again discards old
   samples; cancel; countdown 3-2-1, frames during the countdown ignored, 5 s collected after it. A visibility rule
   changed from `>` to `>=` is caught.
-- **Result:** the first 9 tests pass in Android Studio and calibration works on the Samsung; countdown added
-  afterwards (to re-test).
+- **Result:** the first 9 tests pass in Android Studio and calibration works on the Samsung.
 
 ### Step 5: Monitoring screen + alerts (2026-11-22)
 

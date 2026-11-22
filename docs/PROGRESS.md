@@ -15,8 +15,8 @@ Rules for coding agents in the Android project: [`android/AGENTS.md`](../android
 | 1 | Android project + libraries + model files + self-test | ✅ done | 2026-11-21 |
 | 2 | Camera + pose detection | ✅ done | 2026-11-21 |
 | 3 | Posture logic in plain Kotlin + unit tests | ✅ done | 2026-11-21 |
-| 4 | Calibration | 🔧 code + tests written, to test on the phone | 2026-11-22 |
-| 5 | Monitoring screen + alerts | | |
+| 4 | Calibration | ✅ done | 2026-11-22 |
+| 5 | Monitoring screen + alerts | ✅ done | 2026-11-22 |
 | 6 | Real test (accuracy, battery, heat) | | |
 | 7 | Hand-off to Zenon / Nuno | | |
 | 8 | Cloud mode (2-tier) | | |
@@ -225,7 +225,7 @@ in milliseconds; the app passes the real time.
 - **Result:** all 27 JVM tests pass in Android Studio; `LocalOnnxClassifierTest` passes on the phone
   (`connectedDebugAndroidTest` on the Samsung SM-A566B, Android 17: BUILD SUCCESSFUL).
 
-### Step 4: Calibration (2026-11-22, in progress)
+### Step 4: Calibration (2026-11-22)
 
 **Goal:** record the user's own "sitting straight" position. The model judges the difference from it
 (features − calibration), so nothing can be classified without a calibration.
@@ -267,6 +267,43 @@ and then sit back, otherwise the calibration would record them leaning towards t
 - **Result:** the first 9 tests pass in Android Studio and calibration works on the Samsung; countdown added
   afterwards (to re-test).
 
+### Step 5: Monitoring screen + alerts (2026-11-22)
+
+**Goal:** connect everything into live monitoring, the actual app:
+camera → pose (confidence 0.6) → 9 features − calibration → model (at most 5×/s) → smoothing + timers →
+green "Good" / red "Bad posture" after 3 s → alert after 10 min of continuous bad posture.
+
+Rules from the desktop app (basics only, SKILL.md step 5): pose confidence 0.6 while monitoring; classification
+at most every 0.2 s; 14 of the last 20 bad → bad; red sign after 3 s; 10 min continuous → a simple on-screen alert,
+no sound or vibration (D6). Left out (D5): stretch GIF, statistics/sessions, avatars.
+
+- `posture/PosturePipeline.kt` (plain Kotlin): the whole per-frame chain (features → − calibration → classifier
+  via `InferenceThrottle` → `PostureStateMachine`); new calibration or settings → start from scratch; measures the
+  time of each model run. The classifier is an interface, so the cloud classifier (Step 8) plugs in here.
+- `alert/AlertManager.kt`: shows the alert on `LongBadPostureAlert` until the user presses OK.
+- `ui/common/CameraPermission.kt`: shared camera permission check (used by both screens).
+- `ui/monitor/MonitorViewModel.kt`: pose detector (0.6), ONNX model loaded on a background thread, one queue
+  (`Channel`) for pose results, calibration changes and button presses, processed by one background coroutine,
+  so the pipeline is never used from two threads; exposes `postureState` and `events` for Zenon/Nuno;
+  logs once per second (Logcat tag `Monitor`).
+- `ui/monitor/MonitorScreen.kt`: preview + dots, big status box (green "Good" / red "Bad posture" / grey "No one
+  detected"), bad-posture seconds, last model answer, **test mode** switch (alert after 30 s instead of 10 min),
+  Recalibrate button, live pose FPS / model runs per second / model time; the alert dialog.
+- `MainActivity`: navigation: no calibration → calibration screen; calibration saved → monitoring;
+  "Start monitoring" / "Recalibrate" switch between them.
+- **Result on the Samsung:** all 48 JVM tests pass in Android Studio. With the phone standing in place and the user
+  not touching it: sitting straight → green "Good"; mild and strong slouching → red "Bad posture" after a few
+  seconds; test mode → the alert dialog after ~30 s of slouching. The model makes occasional mistakes, the same kind
+  as in the desktop app; measured properly in Step 6.
+- **First phone run:** ~24 pose FPS, ~4.3 model runs per second, ~0.7 ms per model run. With ~4.3 runs/s the
+  smoothing needs 14 / 4.3 ≈ 3.3 s, so the red sign appears ≈ 6.3 s after slouching starts (the tests assume perfectly
+  even frames and get 5.8 s).
+- **Tests:** `PosturePipelineTest` (8 JVM tests, with a fake classifier): nothing is judged without a calibration;
+  the classifier gets features − calibration; ~5 model runs per second at 23 FPS; no person → no model run;
+  sitting straight stays good; slouching → sign after ~5.8 s, not before; test mode → alert after 30 s;
+  new calibration starts from scratch. Removing the 5×/s limit is caught (230 instead of ~46 model runs in 10 s,
+  and the sign would come much too early, because the 20-prediction window fills in under a second).
+
 ---
 
 ## 4. Problems and how they were solved
@@ -295,6 +332,9 @@ and then sit back, otherwise the calibration would record them leaning towards t
 | Pose detection per frame (MediaPipe, LIVE_STREAM) | **~67 ms** | Samsung, 640×480 | 2 |
 | Rotate + mirror per frame | **~5.6 ms** | Samsung | 2 |
 | Pose frames per second | **~23 FPS** (5 needed for classification) | Samsung | 2 |
+| Live monitoring: pose frames per second | **~24 FPS** | Samsung, posture good | 5 |
+| Live monitoring: model runs per second | **~4.3/s** (limit "at most every 0.2 s"; frames arrive every ~42 ms, so a run happens ~0.23 s apart on average) | Samsung | 5 |
+| Live monitoring: time per model run (in the pipeline) | **~0.7 ms** | Samsung | 5 |
 | Cloud `/predict` latency | *to measure* | | 8–9 |
 | Battery / heat over 1 h | *to measure* | Samsung | 6 |
 
@@ -330,6 +370,11 @@ nothing and add network time (to measure in Step 8).
 | `android/app/src/main/java/com/postureguard/ui/common/CameraPreview.kt` | 4 | Shared camera preview + landmark dots                                         |
 | `android/app/src/main/java/com/postureguard/ui/calibration/*` | 4 | Calibration ViewModel + screen                                                |
 | `android/app/src/test/java/com/postureguard/calibration/CalibrationCollectorTest.kt` | 4 | JVM unit tests (12)                                                           |
+| `android/app/src/main/java/com/postureguard/posture/PosturePipeline.kt` | 5 | Per-frame chain: calibration → model (5×/s) → state machine |
+| `android/app/src/main/java/com/postureguard/alert/AlertManager.kt` | 5 | 10-minute alert dialog state |
+| `android/app/src/main/java/com/postureguard/ui/common/CameraPermission.kt` | 5 | Shared camera permission check |
+| `android/app/src/main/java/com/postureguard/ui/monitor/*` | 5 | Monitoring ViewModel + screen |
+| `android/app/src/test/java/com/postureguard/posture/PosturePipelineTest.kt` | 5 | JVM unit tests (8) |
 | `docs/PROGRESS.md` | – | This report                                                                   |
 
 ### How to reproduce
@@ -346,8 +391,7 @@ Android: open `android/` in Android Studio → Sync → Run on the phone → pos
 
 ---
 
-## 7. Next: Step 5 (monitoring screen + alerts)
-- After calibration: camera → pose (confidence 0.6) → features − calibration → `InferenceThrottle` (5 Hz) →
-  `LocalOnnxClassifier` → `PostureStateMachine`.
-- Minimal testing UI: green "Good" / red "Bad posture" sign after 3 s, bad-seconds counter, Recalibrate button.
-- `LongBadPostureAlert` → simple on-screen alert dialog, no vibration/sound (D6); 10-min limit lowerable for testing.
+## 7. Next: Step 6 (real test)
+- Phone in its real position (end of the desk, lens about chin height); calibrate there.
+- Repeat the `testp6`-style scenario (good / bad / good / bad, incl. mild slouching) and note what the app shows.
+- 1-hour run while charging: battery and heat.

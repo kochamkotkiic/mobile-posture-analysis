@@ -15,7 +15,7 @@ Rules for coding agents in the Android project: [`android/AGENTS.md`](../android
 | 1 | Android project + libraries + model files + self-test | ✅ done | 2026-11-21 |
 | 2 | Camera + pose detection | ✅ done | 2026-11-21 |
 | 3 | Posture logic in plain Kotlin + unit tests | ✅ done | 2026-11-21 |
-| 4 | Calibration | | |
+| 4 | Calibration | 🔧 code + tests written, to test on the phone | 2026-11-22 |
 | 5 | Monitoring screen + alerts | | |
 | 6 | Real test (accuracy, battery, heat) | | |
 | 7 | Hand-off to Zenon / Nuno | | |
@@ -225,6 +225,48 @@ in milliseconds; the app passes the real time.
 - **Result:** all 27 JVM tests pass in Android Studio; `LocalOnnxClassifierTest` passes on the phone
   (`connectedDebugAndroidTest` on the Samsung SM-A566B, Android 17: BUILD SUCCESSFUL).
 
+### Step 4: Calibration (2026-11-22, in progress)
+
+**Goal:** record the user's own "sitting straight" position. The model judges the difference from it
+(features − calibration), so nothing can be classified without a calibration.
+
+Rules taken from the desktop app (`server.py` lines 99–148, `calibration.py`), basics only:
+
+| Rule | Value |
+|---|---|
+| Pose detection confidence during calibration | 0.7 (monitoring uses 0.6) |
+| A frame is used only if the mean shoulder visibility is | > 0.6 |
+| Start possible only when | shoulder visibility > 0.6 |
+| Collection time after Start | 5 s |
+| Minimum frames | 10, otherwise "not enough frames, try again" |
+| Calibration | mean of each of the 9 features |
+| Detection hint | "excellent" if visibility > 0.7, otherwise "adjust your position" |
+| Stored keys | `nose_x` … `right_shoulder_z` (same as the Python profiles) |
+
+Left out on purpose (D5): profiles/names, avatars, choosing a profile; there is one calibration per phone.
+
+Added for the phone: a **3 s countdown** after pressing Start (frames during it are ignored). On the laptop the
+user was already in position at the keyboard; with the phone at the far end of the desk the user has to touch it
+and then sit back, otherwise the calibration would record them leaning towards the phone.
+
+- `calibration/CalibrationCollector.kt` (plain Kotlin): the 5 s collection and averaging; gets the frame time
+  as a parameter, unit-tested on the PC.
+- `calibration/CalibrationRepository.kt`: saves/loads the calibration with DataStore (9 values + time + number
+  of frames); the old calibration stays until a new one is saved. Stored in the app's private storage:
+  `/data/data/com.postureguard/files/datastore/calibration.preferences_pb` (not visible in the phone's file
+  manager; viewable in Android Studio → Device Explorer; deleted on uninstall or "Clear storage").
+- `ui/common/CameraPreview.kt`: the Step 2 camera preview + dots moved into a shared file (reused in Step 5).
+- `ui/calibration/CalibrationViewModel.kt` + `CalibrationScreen.kt` (MVVM): states Ready → Collecting →
+  Calibrated; Start sets a flag and the next camera frame starts the 5 s (same clock as the frames, collector used
+  from one thread only); after calibrating, a live check shows "current features − calibration".
+- `MainActivity` now opens the calibration screen.
+- **Tests:** `CalibrationCollectorTest` (12 JVM tests): mean of the frames; frames without a person or with
+  visibility ≤ 0.6 ignored; 9 frames → fail, 10 → ok; frame at exactly 5 s still used; Start again discards old
+  samples; cancel; countdown 3-2-1, frames during the countdown ignored, 5 s collected after it. A visibility rule
+  changed from `>` to `>=` is caught.
+- **Result:** the first 9 tests pass in Android Studio and calibration works on the Samsung; countdown added
+  afterwards (to re-test).
+
 ---
 
 ## 4. Problems and how they were solved
@@ -284,6 +326,10 @@ nothing and add network time (to measure in Step 8).
 | `android/app/src/main/java/com/postureguard/posture/*` | 3 | Features, calibration, throttle, state machine, ONNX classifier |
 | `android/app/src/test/java/com/postureguard/posture/*` | 3 | JVM unit tests (27) |
 | `android/app/src/androidTest/java/com/postureguard/posture/LocalOnnxClassifierTest.kt` | 3 | ONNX classifier test on the phone |
+| `android/app/src/main/java/com/postureguard/calibration/*` | 4 | Calibration collector + DataStore repository |
+| `android/app/src/main/java/com/postureguard/ui/common/CameraPreview.kt` | 4 | Shared camera preview + landmark dots |
+| `android/app/src/main/java/com/postureguard/ui/calibration/*` | 4 | Calibration ViewModel + screen |
+| `android/app/src/test/java/com/postureguard/calibration/CalibrationCollectorTest.kt` | 4 | JVM unit tests (9) |
 | `docs/PROGRESS.md` | – | This report |
 
 ### How to reproduce
@@ -300,9 +346,8 @@ Android: open `android/` in Android Studio → Sync → Run on the phone → pos
 
 ---
 
-## 7. Next: Step 4 (calibration)
-- Calibration screen: preview + "Sit straight, then press Start" + 5 s progress bar.
-- Collect frames for 5 s with pose confidence 0.7, only where shoulder visibility > 0.6; need ≥ 10 samples;
-  calibration = mean of each of the 9 values (`calibration.py` / `server.py` lines 99–148).
-- Save with DataStore (same keys as the Python profiles); start monitoring if a calibration exists;
-  "Recalibrate" button.
+## 7. Next: Step 5 (monitoring screen + alerts)
+- After calibration: camera → pose (confidence 0.6) → features − calibration → `InferenceThrottle` (5 Hz) →
+  `LocalOnnxClassifier` → `PostureStateMachine`.
+- Minimal testing UI: green "Good" / red "Bad posture" sign after 3 s, bad-seconds counter, Recalibrate button.
+- `LongBadPostureAlert` → simple on-screen alert dialog, no vibration/sound (D6); 10-min limit lowerable for testing.

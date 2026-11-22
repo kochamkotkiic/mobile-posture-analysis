@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -39,6 +40,8 @@ import java.util.Locale
 private val Green = Color(0xFF2E7D32)
 private val Red = Color(0xFFC62828)
 private val Grey = Color(0xFF616161)
+private val Blue = Color(0xFF1565C0)
+private val Orange = Color(0xFFEF6C00)
 
 /** Step 5: live monitoring (minimal testing UI; the polished UI is Zenon's). */
 @Composable
@@ -62,6 +65,7 @@ fun MonitorScreen(
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                state.recording?.let { RecordingCard(it) }
                 StatusBox(state)
                 Spacer(Modifier.height(12.dp))
                 Details(state)
@@ -74,6 +78,8 @@ fun MonitorScreen(
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = onRecalibrate) { Text("Recalibrate") }
                 Text("Recalibrate whenever you move the phone or the chair.", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(12.dp))
+                RecordingControls(state, viewModel)
                 Spacer(Modifier.height(12.dp))
                 Stats(state)
             }
@@ -143,3 +149,46 @@ private fun Stats(state: MonitorUiState) {
 }
 
 private fun fmt(format: String, vararg args: Any) = String.format(Locale.US, format, *args)
+
+// --- Step 6: guided test / recording ------------------------------------------------------------------
+
+/** Big instruction card during the guided test (the user follows it, the app knows the ground truth). */
+@Composable
+private fun RecordingCard(recording: RecordingUi) {
+    if (recording.guided) {
+        val (title, color) = when (recording.stepKind) {
+            "good" -> "Sit straight" to Blue
+            "mild" -> "Slouch slightly" to Orange
+            "strong" -> "Slouch strongly" to Red
+            else -> "Get ready" to Grey
+        }
+        Column(
+            Modifier.fillMaxWidth().background(color, RoundedCornerShape(12.dp)).padding(12.dp),
+        ) {
+            Text(
+                "Guided test · step ${recording.stepNumber}/${recording.stepCount} · ${recording.secondsLeftInStep} s left",
+                color = Color.White, style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(title, color = Color.White, style = MaterialTheme.typography.headlineMedium)
+            Text(recording.instruction, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+        }
+    } else {
+        Text(
+            fmt("● Recording %d:%02d · %d frames", recording.elapsedSeconds / 60, recording.elapsedSeconds % 60, recording.frames),
+            color = Red, style = MaterialTheme.typography.titleMedium,
+        )
+    }
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable
+private fun RecordingControls(state: MonitorUiState, viewModel: MonitorViewModel) {
+    Text("Step 6: real test", style = MaterialTheme.typography.titleSmall)
+    if (state.recording == null) {
+        Button(onClick = viewModel::startGuidedTest) { Text("Start guided test (5 min)") }
+        OutlinedButton(onClick = viewModel::startFreeRecording) { Text("Record session (battery / heat)") }
+    } else {
+        OutlinedButton(onClick = viewModel::stopRecording) { Text("Stop recording") }
+    }
+    state.lastSessionMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+}

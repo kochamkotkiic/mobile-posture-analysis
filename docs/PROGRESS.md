@@ -17,7 +17,7 @@ Rules for coding agents in the Android project: [`android/AGENTS.md`](../android
 | 3 | Posture logic in plain Kotlin + unit tests | ✅ done | 2026-11-21 |
 | 4 | Calibration | ✅ done | 2026-11-22 |
 | 5 | Monitoring screen + alerts | ✅ done | 2026-11-22 |
-| 6 | Real test (accuracy, battery, heat) | | |
+| 6 | Real test (accuracy, battery, heat) | ✅ done | 2026-11-22 |
 | 7 | Hand-off to Zenon / Nuno | | |
 | 8 | Cloud mode (2-tier) | | |
 | 9 | Evaluation: on-device vs cloud | | |
@@ -303,20 +303,103 @@ no sound or vibration (D6). Left out (D5): stretch GIF, statistics/sessions, ava
   new calibration starts from scratch. Removing the 5×/s limit is caught (230 instead of ~46 model runs in 10 s,
   and the sign would come much too early, because the 20-prediction window fills in under a second).
 
+### Step 6: Real test (2026-11-22)
+
+**Goal:** numbers for the evaluation chapter: how often the phone is right (overall, mild vs strong slouching),
+how fast the red sign appears, false alarms, battery drain and heat.
+
+**Ground truth from a script:** for `testp6` the truth was labelled by hand from the video; on the phone the app
+gives the instructions itself, so it knows the truth for every moment. Guided test (~5 min 20 s):
+prepare 5 s (not evaluated) → sit straight 60 s → slouch slightly 45 s → straight 45 s → slouch strongly 45 s →
+straight 45 s → slouch slightly 45 s → straight 30 s.
+
+- `session/GuidedScenario.kt` (plain Kotlin): the steps and "which step at which second".
+- `session/SessionRecorder.kt` (plain Kotlin): writes `frames.csv` (one row per camera frame: time, step, ground
+  truth, person visible, new model answer, confidence, smoothed label, sign shown, bad seconds, the 9 features −
+  calibration), `battery.csv` (every 10 s) and `meta.csv` (phone, settings, scenario, calibration).
+- `session/BatteryReader.kt`: battery %, charging, temperature, current, Android thermal status.
+- Monitoring screen: "Start guided test (5 min)" (coloured instruction card with step and seconds left),
+  "Record session (battery / heat)" for long runs, "Stop recording"; shows where the files were saved.
+  Recording runs in the same queue/coroutine as the pipeline (no extra threads); a guided test starts with empty
+  smoothing; files are flushed every second.
+- Files on the phone: `/sdcard/Android/data/com.postureguard/files/sessions/<date_time>_guided/` (or `_free`),
+  copied to the PC with Android Studio → Device Explorer.
+- `src/evaluation/evaluate_phone_session.py`: accuracy / sensitivity / specificity on three levels (model answer,
+  smoothed label, red sign = what the user sees), on all frames and "settled" (without the first 6 s of each step,
+  because the sign is designed to need ~6 s); mild vs strong; per step: person visible %, delay to the sign,
+  false-sign seconds; number of false alarms; battery drain %/h and max temperature; `timeline.png`.
+- **Tests:** `SessionTest` (5 JVM tests): scenario length and step boundaries, ground truth values, exact CSV rows.
+  The evaluation script was checked on simulated sessions (generated with the app's rules, not real data).
+- What the simulation showed (to watch in the real test):
+  - every frame without a detected person resets the 3 s timer (rule from `server.py`); with 1% random detection
+    gaps, strong slouching showed the sign only ~31% of the time instead of ~100% → check "person visible %"
+    in the real results;
+  - if the model calls mild slouching "bad" in only ~60% of its answers, the 14-of-20 rule (70%) rarely triggers:
+    smoothing trades sensitivity to borderline posture for fewer false alarms.
+
+
+**Results: 3 guided runs** (Samsung SM-A566B, Android 17, phone in its real position, charging;
+`data/phone_sessions/20261122_195834_guided`, `_200404_guided`, `_200930_guided`, local only). Pooled over all
+3 runs (19,505 frames, person visible; "settled" = without the first 6 s of each step):
+
+| Level | All frames: accuracy | Settled: accuracy | Settled: sensitivity (bad detected) | Settled: specificity (good recognised) |
+|---|---|---|---|---|
+| Model (each answer) | 85.65% | 87.58% | 97.41% | 80.38% |
+| Smoothed (14 of 20) | 87.97% | 94.73% | 97.13% | 92.99% |
+| **Red sign (what the user sees)** | 85.87% | **93.84%** | 88.05% | **98.05%** |
+
+| Segment (settled) | Model correct | Smoothed correct | Sign correct |
+|---|---|---|---|
+| Sitting straight | 80.38% | 92.99% | 98.05% |
+| Mild slouching | 96.20% | 95.81% | 86.53% |
+| Strong slouching | 100.00% | 100.00% | 91.39% |
+
+Per run (settled, sign): accuracy 93.03% / 90.76% / 97.73%; false alarms (sign switched on while sitting
+straight) 0 / 3 / 1. Delay from the start of a slouching step to the red sign: mean **7.1 s** (4.3–8.4 s).
+
+Findings:
+- **Mild slouching is detected** on the phone: the model calls it "bad" in 96% of its answers, the sign is on
+  87% of the settled time.
+- **Smoothing works as intended:** single model answers wrongly say "bad" while sitting straight in ~20% of
+  cases; the 14-of-20 smoothing and the 3 s sign bring this to ~2% (specificity 80% → 98%).
+- The model's false "bad" answers come mostly in the "sit straight" steps right after a slouching step and at the
+  end of a run (up to 56% of answers in the last step of run 2): probably not returning exactly to the calibrated
+  position, or fatigue; not phone-specific.
+- **Detection gaps reset the sign** (rule from `server.py`, predicted by the simulation): in run 2, during strong
+  slouching, MediaPipe lost the person 3 times (130 frames ≈ 6 s, probably head too far down), so the sign was on
+  only 60% of that step. Known limitation.
+- Compared with the desktop pipeline on the `testp6` video (89.69% smoothed accuracy, all frames), the phone reaches
+  87.97% (smoothed, all frames): the same level. (Not exactly the same metric: the desktop script smooths per frame.)
+- Pose FPS during the recorded runs 20.4–21.5 (24 without recording, Step 5): CSV writing + phone charging/warming.
+- Heat (charging): 31.4 → 34.9 °C over the 3 runs (~16 min), Android thermal status max 2 ("moderate").
+  Battery drain could not be measured because the phone was charging → measured in a separate unplugged run (below).
+
+**Results: battery / heat, unplugged** (`data/phone_sessions/20261122_203325_free`, "Record session", normal
+monitoring while working, 43.5 min, 55,877 frames, person visible 99.7%; screen brightness about 14%,
+Eye Comfort Shield on):
+
+| | Value |
+|---|---|
+| Battery | 97% → 81% in 43.5 min = **22.1% per hour** (≈ 4.5 h from full to empty) |
+| Mean current (whole phone: screen + camera + processing) | ≈ 1.07 A |
+| Temperature | 30.7 → 34.0 °C (≈ +0.8 °C per 10 min, flattening at the end) |
+| Android thermal status | 2 ("moderate") from the start, 3 ("severe") from minute 26 |
+| Pose FPS / model runs per second, per 10 min | 21.0 / 20.5 / 21.6 / 22.5 / 21.3 FPS; 4.47–4.63 runs/s → **no throttling** |
+
+The drain is for the whole phone with the screen on at low brightness (a brighter screen would drain faster); it does not separate the app from the screen (that would need
+a baseline run with only the screen on).
+
 ---
 
 ## 4. Problems and how they were solved
 
-| # | Problem | Cause | Fix |
-|---|---|---|---|
+| #  | Problem | Cause | Fix |
+|----|---|---|---|
 | P1 | Model loaded with a different scikit-learn could behave differently | Model saved with scikit-learn 1.3.2, which does not install on Python 3.13 | Step 0 runs in Python **3.11** with scikit-learn 1.3.2, the same as the project |
 | P2 | `onnx` stopped working after installing MediaPipe | MediaPipe 0.10.21 needs `protobuf` 4.x; the newest `onnx` needs `protobuf` 5+ | Pinned `onnx==1.17.0` in `requirements-export.txt`; everything works in one `.venv` |
-| P3 | Test-video evaluation differed from the real app | Training data (`collect_data.py`) and the live app (`server.py`, `calibration.py`) **mirror** the image; `evaluate_external_test.py` did **not** | Measured both (upright frames): mirroring is correct and ~1 point better (89.7% vs 88.5% with the new pose model). Android must rotate → mirror → detect |
-| P4 | Self-test on the phone: **10/20 labels differ from Python** | Bug in **ONNX Runtime 1.27.0**: correct probabilities, but the `label` output was always 1 for our RandomForest. Reproduced in Python: 1.25.1 ✅, **1.26.0 ❌ (wrong probabilities and labels)**, **1.27.0 ❌ (wrong label)**, 1.28–1.32 ✅ | ONNX Runtime Android pinned to **1.25.1**; decision taken from probabilities; self-test also reports if the raw `label` is wrong. Rule in `AGENTS.md`. The cloud server must also avoid 1.26/1.27 |
-| P5 | `testp6.mp4` was evaluated **upside down** (found in Step 2) | The phone stored the video with "rotate 180°" metadata; OpenCV 4.8 ignores it (`CAP_PROP_ORIENTATION_META` = 180, auto-rotation off). Noticed because the nose y was larger than the shoulder y | `compare_pose_models.py` now rotates frames upright from the metadata (`--no-autorotate` reproduces the old run). Step 0.3 re-measured: conclusions unchanged. The earlier `testp6` metrics in `evaluate_external_test.py` were also computed upside down; other phone videos may need the same check |
-| P6 | Phone setup for development | Android apps are installed over USB from Android Studio | Developer options → USB debugging on; Samsung **Auto Blocker off** (it blocks USB commands); accept "Allow USB debugging" |
-| P7 | `git status` shows almost every Android file as modified | Only line endings changed (Windows CRLF vs LF); `git diff --ignore-cr-at-eol` shows the real changes | Harmless; commit only the folders that really changed |
-| P8 | CSV files never reach GitHub, including the training data | `.gitignore` ignores every `*.csv` file, so `data/posture_data.csv` and all result tables are not in the repo. A fresh clone cannot run `rebuild_scaler.py` (needed for `scaler.pkl`) or `check_onnx.py` | Add the needed files on purpose: `git add -f data/posture_data.csv` and the small result tables; large per-frame landmark files stay local |
+| P3 | Self-test on the phone: **10/20 labels differ from Python** | Bug in **ONNX Runtime 1.27.0**: correct probabilities, but the `label` output was always 1 for our RandomForest. Reproduced in Python: 1.25.1 ✅, **1.26.0 ❌ (wrong probabilities and labels)**, **1.27.0 ❌ (wrong label)**, 1.28–1.32 ✅ | ONNX Runtime Android pinned to **1.25.1**; decision taken from probabilities; self-test also reports if the raw `label` is wrong. Rule in `AGENTS.md`. The cloud server must also avoid 1.26/1.27 |
+| P4 | Phone setup for development | Android apps are installed over USB from Android Studio | Developer options → USB debugging on; Samsung **Auto Blocker off** (it blocks USB commands); accept "Allow USB debugging" |
+| P5 | CSV files never reach GitHub, including the training data | `.gitignore` ignores every `*.csv` file, so `data/posture_data.csv` and all result tables are not in the repo. A fresh clone cannot run `rebuild_scaler.py` (needed for `scaler.pkl`) or `check_onnx.py` | Add the needed files on purpose: `git add -f data/posture_data.csv` and the small result tables; large per-frame landmark files stay local |
 
 ---
 
@@ -335,7 +418,15 @@ no sound or vibration (D6). Left out (D5): stretch GIF, statistics/sessions, ava
 | Live monitoring: model runs per second | **~4.3/s** (limit "at most every 0.2 s"; frames arrive every ~42 ms, so a run happens ~0.23 s apart on average) | Samsung | 5 |
 | Live monitoring: time per model run (in the pipeline) | **~0.7 ms** | Samsung | 5 |
 | Cloud `/predict` latency | *to measure* | | 8–9 |
-| Battery / heat over 1 h | *to measure* | Samsung | 6 |
+| Guided test, red sign accuracy (settled, 3 runs) | **93.84%** (sensitivity 88.05%, specificity 98.05%) | Samsung | 6 |
+| Guided test, mild / strong slouching: sign correct (settled) | **86.53% / 91.39%** | Samsung | 6 |
+| Delay until the red sign appears | **7.1 s** mean (4.3–8.4 s) | Samsung | 6 |
+| False alarms per 5-min run | 0 / 3 / 1 | Samsung | 6 |
+| Pose FPS while recording | 20.4–21.5 | Samsung, charging | 6 |
+| Temperature (charging, ~16 min) | 31.4 → 34.9 °C, thermal status max 2 (moderate) | Samsung | 6 |
+| Battery drain unplugged (whole phone, screen on, monitoring) | **22.1% per hour** (97% → 81% in 43.5 min) | Samsung, brightness ~14%, Eye Comfort Shield on | 6 |
+| Mean current while monitoring | ≈ 1.07 A | Samsung | 6 |
+| Temperature unplugged, 43.5 min | 30.7 → 34.0 °C, thermal status up to 3; FPS stable 21–22.5 (no throttling) | Samsung | 6 |
 
 At 5 classifications per second the classifier uses 5 × 0.11 ms = 0.55 ms per second of time (≈0.06%).
 Per frame on the phone: 5.6 ms (rotate + mirror) + 67 ms (pose) + 0.11 ms (classifier) ≈ 72.7 ms, so pose
@@ -374,6 +465,9 @@ nothing and add network time (to measure in Step 8).
 | `android/app/src/main/java/com/postureguard/ui/common/CameraPermission.kt` | 5 | Shared camera permission check |
 | `android/app/src/main/java/com/postureguard/ui/monitor/*` | 5 | Monitoring ViewModel + screen |
 | `android/app/src/test/java/com/postureguard/posture/PosturePipelineTest.kt` | 5 | JVM unit tests (8) |
+| `android/app/src/main/java/com/postureguard/session/*` | 6 | Guided scenario, session recorder (CSV), battery reader |
+| `android/app/src/test/java/com/postureguard/session/SessionTest.kt` | 6 | JVM unit tests (5) |
+| `src/evaluation/evaluate_phone_session.py` | 6 | Evaluates a recorded phone session (accuracy, delay, battery) |
 | `docs/PROGRESS.md` | – | This report                                                                   |
 
 ### How to reproduce
@@ -390,7 +484,6 @@ Android: open `android/` in Android Studio → Sync → Run on the phone → pos
 
 ---
 
-## 7. Next: Step 6 (real test)
-- Phone in its real position (end of the desk, lens about chin height); calibrate there.
-- Repeat the `testp6`-style scenario (good / bad / good / bad, incl. mild slouching) and note what the app shows.
-- 1-hour run while charging: battery and heat.
+## 7. Next: Step 7 (hand-off to Zenon / Nuno)
+- Guide for Zenon: `MonitorViewModel.postureState` / `events`, `PostureState` / `PostureEvent`, where the UI plugs in.
+- Guide for Nuno: `PostureClassifier` interface + `/predict` API, calibration JSON format, ONNX Runtime version note.

@@ -307,30 +307,30 @@ nothing and add network time (to measure in Step 8).
 
 ## 6. Files added so far
 
-| File | Step | Purpose |
-|---|---|---|
-| `src/export/export_onnx.py` | 0.1 | `.pkl` → `models/posture_model.onnx` |
-| `src/export/check_onnx.py` | 0.2 | Equality check + `models/onnx_test_cases.json` |
+| File | Step | Purpose                                                                       |
+|---|---|-------------------------------------------------------------------------------|
+| `src/export/export_onnx.py` | 0.1 | `.pkl` → `models/posture_model.onnx`                                          |
+| `src/export/check_onnx.py` | 0.2 | Equality check + `models/onnx_test_cases.json`                                |
 | `src/export/compare_pose_models.py` | 0.3 | Legacy vs Tasks pose model, with/without mirroring, auto-rotates phone videos |
-| `requirements-export.txt` | 0 | `skl2onnx`, `onnx==1.17.0`, `onnxruntime` |
-| `models/posture_model.onnx`, `models/onnx_test_cases.json`, `models/pose_landmarker_full.task` | 0 | Models + test cases |
-| `data/reports/testp6/pose_comparison_upright.csv` (+ `landmarks_*_mirror-yes_upright.csv`, local only) | 0.3 | Pose model comparison (upright, final) |
-| `data/reports/testp6/pose_comparison.csv` (+ `landmarks_*_mirror-yes.csv`, local only) | 0.3 | Same, upside-down run (superseded, kept for reference) |
-| `android/` | 1 | Android project (wizard + libraries + manifest) |
-| `android/AGENTS.md` | 1 | Rules for coding agents |
-| `android/app/src/main/assets/*` | 1 | Copies of the model files + test cases |
-| `android/app/src/main/java/com/postureguard/selftest/*` | 1 | Temporary self-test screen |
-| `android/app/src/main/java/com/postureguard/camera/*` | 2 | CameraX config + frame analyzer (rotate + mirror) |
-| `android/app/src/main/java/com/postureguard/pose/*` | 2 | Pose data classes + MediaPipe wrapper |
-| `android/app/src/main/java/com/postureguard/ui/posedebug/*` | 2 | Pose debug ViewModel + screen |
-| `android/app/src/main/java/com/postureguard/posture/*` | 3 | Features, calibration, throttle, state machine, ONNX classifier |
-| `android/app/src/test/java/com/postureguard/posture/*` | 3 | JVM unit tests (27) |
-| `android/app/src/androidTest/java/com/postureguard/posture/LocalOnnxClassifierTest.kt` | 3 | ONNX classifier test on the phone |
-| `android/app/src/main/java/com/postureguard/calibration/*` | 4 | Calibration collector + DataStore repository |
-| `android/app/src/main/java/com/postureguard/ui/common/CameraPreview.kt` | 4 | Shared camera preview + landmark dots |
-| `android/app/src/main/java/com/postureguard/ui/calibration/*` | 4 | Calibration ViewModel + screen |
-| `android/app/src/test/java/com/postureguard/calibration/CalibrationCollectorTest.kt` | 4 | JVM unit tests (9) |
-| `docs/PROGRESS.md` | – | This report |
+| `requirements-export.txt` | 0 | `skl2onnx`, `onnx==1.17.0`, `onnxruntime`                                     |
+| `models/posture_model.onnx`, `models/onnx_test_cases.json`, `models/pose_landmarker_full.task` | 0 | Models + test cases                                                           |
+| `data/reports/testp6/pose_comparison_upright.csv` (+ `landmarks_*_mirror-yes_upright.csv`, local only) | 0.3 | Pose model comparison (upright, final)                                        |
+| `data/reports/testp6/pose_comparison.csv` (+ `landmarks_*_mirror-yes.csv`, local only) | 0.3 | Same, upside-down run (superseded, kept for reference)                        |
+| `android/` | 1 | Android project (wizard + libraries + manifest)                               |
+| `android/AGENTS.md` | 1 | Rules for coding agents                                                       |
+| `android/app/src/main/assets/*` | 1 | Copies of the model files + test cases                                        |
+| `android/app/src/main/java/com/postureguard/selftest/*` | 1 | Temporary self-test screen                                                    |
+| `android/app/src/main/java/com/postureguard/camera/*` | 2 | CameraX config + frame analyzer (rotate + mirror)                             |
+| `android/app/src/main/java/com/postureguard/pose/*` | 2 | Pose data classes + MediaPipe wrapper                                         |
+| `android/app/src/main/java/com/postureguard/ui/posedebug/*` | 2 | Pose debug ViewModel + screen                                                 |
+| `android/app/src/main/java/com/postureguard/posture/*` | 3 | Features, calibration, throttle, state machine, ONNX classifier               |
+| `android/app/src/test/java/com/postureguard/posture/*` | 3 | JVM unit tests (27)                                                           |
+| `android/app/src/androidTest/java/com/postureguard/posture/LocalOnnxClassifierTest.kt` | 3 | ONNX classifier test on the phone                                             |
+| `android/app/src/main/java/com/postureguard/calibration/*` | 4 | Calibration collector + DataStore repository                                  |
+| `android/app/src/main/java/com/postureguard/ui/common/CameraPreview.kt` | 4 | Shared camera preview + landmark dots                                         |
+| `android/app/src/main/java/com/postureguard/ui/calibration/*` | 4 | Calibration ViewModel + screen                                                |
+| `android/app/src/test/java/com/postureguard/calibration/CalibrationCollectorTest.kt` | 4 | JVM unit tests (12)                                                           |
+| `docs/PROGRESS.md` | – | This report                                                                   |
 
 ### How to reproduce
 ```bash

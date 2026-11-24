@@ -5,3 +5,6 @@ numpy
 pydantic-settings
 pytest
 httpx
+sqlmodel
+firebase-admin
+psycopg[binary]

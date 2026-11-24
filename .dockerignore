@@ -1,0 +1,10 @@
+# Docker builds from the repo root (cloud/Dockerfile) but only needs cloud/ and the model
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/*.db
+android/
+data/
+ui/
+node_modules/
+.git/

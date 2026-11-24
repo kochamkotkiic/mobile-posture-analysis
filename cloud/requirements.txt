@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+onnxruntime==1.32.0
+numpy
+pydantic-settings
+pytest
+httpx

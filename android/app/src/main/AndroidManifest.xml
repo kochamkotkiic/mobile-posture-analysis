@@ -5,8 +5,13 @@
     <!-- PostureGuard: front camera for pose detection (images never leave the phone) -->
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Cloud API (friends, alerts, later cloud classification). Only numbers are sent, never images. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- usesCleartextTraffic: allows plain http:// to the local dev server (emulator 10.0.2.2, or the PC as
+         edge node on the same Wi-Fi). The deployed Cloud Run server uses https anyway. -->
     <application
+        android:usesCleartextTraffic="true"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

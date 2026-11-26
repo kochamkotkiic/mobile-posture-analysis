@@ -19,6 +19,8 @@ import com.postureguard.posture.PosturePipeline
 import com.postureguard.posture.PostureState
 import com.postureguard.posture.FeatureExtractor
 import com.postureguard.posture.Prediction
+import com.postureguard.posture.SessionStats
+import com.postureguard.posture.SessionSummary
 import com.postureguard.session.BatteryReader
 import com.postureguard.session.FrameRecord
 import com.postureguard.session.GuidedScenario
@@ -74,6 +76,8 @@ data class MonitorUiState(
     val recording: RecordingUi? = null,
     /** Where the last recorded session was saved (shown on screen). */
     val lastSessionMessage: String? = null,
+    /** Tracked time, good share and alerts since monitoring started (monitor screen tiles). */
+    val session: SessionSummary = SessionSummary(),
 ) {
     val alertAfterMs: Long get() = if (testMode) MonitorViewModel.TEST_ALERT_MS else MonitorViewModel.ALERT_MS
 }
@@ -140,6 +144,7 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
     private val classificationTimes = ArrayDeque<Long>()
     private var classifyMsAvg = 0.0
     private var lastLogMs = 0L
+    private val sessionStats = SessionStats()
 
     // Step 6 recording, only touched by the processing coroutine
     private val batteryReader = BatteryReader(application)
@@ -172,6 +177,8 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
                         Input.Reset -> {
                             stopRecording("Recording stopped.")
                             pipeline.reset()
+                            sessionStats.reset()
+                            _state.update { it.copy(session = sessionStats.current) }
                         }
                         is Input.StartRecording -> startRecording(pipeline, input.guided)
                         Input.StopRecording -> stopRecording("Recording stopped.")
@@ -221,9 +228,11 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
         result?.update?.events?.forEach { event ->
             Log.i(TAG, "Event: $event")
             alertManager.onEvent(event)
+            sessionStats.onEvent(event)
             _events.tryEmit(event)
         }
         _postureState.value = result?.update?.state
+        sessionStats.onFrame(frame.timestampMs, result?.update?.state)
 
         _state.update {
             it.copy(
@@ -237,6 +246,7 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
                 poseFps = rate(frameTimes),
                 classificationsPerSecond = rate(classificationTimes),
                 classifyMs = classifyMsAvg,
+                session = sessionStats.current,
             )
         }
         logOncePerSecond(frame.timestampMs)

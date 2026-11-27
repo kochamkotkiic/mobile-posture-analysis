@@ -62,6 +62,8 @@ fun MonitorScreen(
     onOpenSettings: () -> Unit,
     onOpenFriends: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Shown at the top of the panel, e.g. the friend challenge card. */
+    topContent: @Composable () -> Unit = {},
 ) {
     LaunchedEffect(Unit) { viewModel.onScreenShown() }
 
@@ -92,6 +94,7 @@ fun MonitorScreen(
                 }
                 Gap(12.dp)
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    topContent()
                     state.recording?.let {
                         RecordingCard(it)
                         Gap(12.dp)

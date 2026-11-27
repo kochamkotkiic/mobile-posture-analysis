@@ -61,6 +61,22 @@ class CloudApi(private val baseUrl: String, private val token: String?) {
     suspend fun sendChallenge(toUid: String): Int =
         JSONObject(request("POST", "/tasks", JSONObject().put("to_uid", toUid))).getInt("id")
 
+    /** Challenges I received ("received") or sent ("sent"), newest first. Expired ones come back as "expired". */
+    suspend fun challenges(role: String): List<ChallengeTask> {
+        val array = JSONArray(request("GET", "/tasks?role=$role"))
+        return (0 until array.length()).map { parseTask(array.getJSONObject(it)) }
+    }
+
+    /**
+     * Monitored user: uploads the normalized features recorded during the 5 s (9 values each, max 200).
+     * The CLOUD classifies them with the same model and decides pass/fail; the sender is notified.
+     */
+    suspend fun submitChallengeResult(taskId: Int, samples: List<FloatArray>): ChallengeTask {
+        val rows = JSONArray()
+        samples.take(MAX_SAMPLES).forEach { s -> rows.put(JSONArray().apply { s.forEach { put(it.toDouble()) } }) }
+        return parseTask(JSONObject(request("POST", "/tasks/$taskId/result", JSONObject().put("samples", rows))))
+    }
+
     // --- plumbing -----------------------------------------------------------------------------------
 
     private suspend fun request(method: String, path: String, body: JSONObject? = null): String = withContext(Dispatchers.IO) {
@@ -131,11 +147,21 @@ class CloudApi(private val baseUrl: String, private val token: String?) {
         favorite = o.optBoolean("favorite", false),
     )
 
+    private fun parseTask(o: JSONObject) = ChallengeTask(
+        id = o.getInt("id"),
+        fromUid = o.getString("from_uid"),
+        toUid = o.getString("to_uid"),
+        status = o.getString("status"),
+        nSamples = if (o.isNull("n_samples")) null else o.optInt("n_samples"),
+        goodFraction = if (o.isNull("good_fraction")) null else o.optDouble("good_fraction").toFloat(),
+    )
+
     private fun JSONObject.optStringOrNull(key: String): String? = if (isNull(key)) null else optString(key)
 
     private companion object {
         const val TAG = "CloudApi"
         const val CONNECT_TIMEOUT_MS = 5_000
         const val READ_TIMEOUT_MS = 10_000
+        const val MAX_SAMPLES = 200 // server limit for /tasks/{id}/result
     }
 }

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.postureguard.alert.AlertManager
 import com.postureguard.calibration.CalibrationRepository
 import com.postureguard.camera.FrameAnalyzer
+import com.postureguard.challenge.ChallengeFrame
 import com.postureguard.pose.Landmark
 import com.postureguard.pose.PoseDetector
 import com.postureguard.pose.PoseFrame
@@ -102,6 +103,13 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
     val postureState: StateFlow<PostureState?> = _postureState.asStateFlow()
     private val _events = MutableSharedFlow<PostureEvent>(extraBufferCapacity = 16)
     val events: SharedFlow<PostureEvent> = _events.asSharedFlow()
+
+    /**
+     * Read-only hook for the friend challenge (Zenon): every processed frame, with the features minus calibration
+     * on the frames where the model ran (~5x/s). Nothing here changes the monitoring itself.
+     */
+    private val _challengeFrames = MutableSharedFlow<ChallengeFrame>(extraBufferCapacity = 64)
+    val challengeFrames: SharedFlow<ChallengeFrame> = _challengeFrames.asSharedFlow()
 
     val alertVisible: StateFlow<Boolean> = alertManager.alertVisible
 
@@ -233,6 +241,12 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
         }
         _postureState.value = result?.update?.state
         sessionStats.onFrame(frame.timestampMs, result?.update?.state)
+        if (_challengeFrames.subscriptionCount.value > 0) {
+            val normalized = if (result?.prediction != null) {
+                pipeline.calibration?.let { cal -> frame.landmarks?.let { cal.normalize(FeatureExtractor.extract(it)) } }
+            } else null
+            _challengeFrames.tryEmit(ChallengeFrame(frame.timestampMs, result?.update?.state?.personVisible == true, normalized))
+        }
 
         _state.update {
             it.copy(

@@ -32,6 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.lifecycle.lifecycleScope
 import com.postureguard.posture.PostureEvent
 import com.postureguard.ui.calibration.CalibrationScreen
+import com.postureguard.ui.friends.ChallengeCard
+import com.postureguard.ui.friends.ChallengeViewModel
 import com.postureguard.ui.friends.FriendsScreen
 import com.postureguard.ui.friends.FriendsViewModel
 import kotlinx.coroutines.launch
@@ -53,6 +55,7 @@ class MainActivity : ComponentActivity() {
     private val monitorViewModel: MonitorViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val friendsViewModel: FriendsViewModel by viewModels()
+    private val challengeViewModel: ChallengeViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +68,10 @@ class MainActivity : ComponentActivity() {
             monitorViewModel.events.collect { event ->
                 if (event == PostureEvent.LongBadPostureAlert) friendsViewModel.reportAlert()
             }
+        }
+        // Friend challenge: the 5 s recording reads the monitor's frames (main thread, one consumer)
+        lifecycleScope.launch {
+            monitorViewModel.challengeFrames.collect { challengeViewModel.onFrame(it) }
         }
 
         setContent {
@@ -121,6 +128,15 @@ class MainActivity : ComponentActivity() {
                                     onOpenSettings = { settingsOpen = true },
                                     onOpenFriends = { friendsOpen = true },
                                     modifier = screenModifier,
+                                    topContent = {
+                                        val challenge by challengeViewModel.state.collectAsState()
+                                        ChallengeCard(
+                                            state = challenge,
+                                            onStart = challengeViewModel::start,
+                                            onClose = challengeViewModel::close,
+                                            onDismissSentResult = challengeViewModel::dismissSentResult,
+                                        )
+                                    },
                                 )
                                 OverlayLayer(visible = friendsOpen) {
                                     FriendsScreen(

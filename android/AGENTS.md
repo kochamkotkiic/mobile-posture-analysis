@@ -34,6 +34,9 @@ Full plan, decisions and team split: `../.claude/skills/posture-mobile/SKILL.md`
   - `settings/`: `SettingsRepository` (DataStore): classifier mode, server URL, developer tools switch
   - `cloud/`: `CloudApi` (HttpURLConnection + org.json, no extra libraries) for Nuno's API
     (`cloud/README.md`): `/me`, `/friends`, `/alerts`, `/tasks`. Base URL = the server address setting.
+  - `challenge/`: `ChallengeRecorder` (plain Kotlin, unit-tested): 3 s countdown + 5 s recording of the
+    normalized features from `MonitorViewModel.challengeFrames` (read-only hook). The cloud judges them (D3).
+    `ui/friends/ChallengeViewModel` checks the server every 15 s for challenges and answers (until FCM push).
   - `account/`: `AccountRepository`, the signed-in user. For now a **test sign-in** for a server started with
     `DEV_AUTH=true` (token `dev:<uid>:<email>`); swap in Firebase Auth later without changing callers.
   - `ui/`: Compose screens + `ui/theme/`

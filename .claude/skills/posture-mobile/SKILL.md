@@ -43,16 +43,18 @@ Team project (3 people). This file is the shared source of truth for humans and 
 
 | Person | Responsibility |
 |---|---|
-| **Emilia** | Change the architecture to mobile: Android app in Kotlin, camera → MediaPipe → features → classifier → 3 s "Bad posture" sign + 10-min alert. Minimal UI just for testing. Also: classifier mode switch (on-device / cloud, later edge) + latency logging for the evaluation. |
-| **Zenon** | Mobile UI/UX and the multi-user (friend) feature. |
-| **Nuno** | Cloud and authentication: store the model, `/predict` API, receive results, accounts, notifications. |
+| **Emilia** | The original desktop app and the ML model it is based on: data collection, feature design, training the classifier (scaler + RandomForest), its evaluation and tests, and the ONNX export for the phone. Then: change the architecture to mobile: Android app in Kotlin, camera → MediaPipe → features → classifier → 3 s "Bad posture" sign + 10-min alert. Minimal UI just for testing. Also: classifier mode switch (on-device / cloud, later edge) with its own small `/predict` client + latency logging, and the on-device vs cloud evaluation (Steps 8–9). |
+| **Zenon** | Mobile UI/UX and the multi-user (friend) feature: all real screens (login / sign-up, polished monitoring screen, friends list with add by email / accept / favourite, challenge screen) and connecting the friend feature to the server **through Nuno's client**: report the 10-min alert (`LongBadPostureAlert` → `POST /alerts`), challenge flow (send, receive, record 5 s of features, upload, show the result). |
+| **Nuno** | Cloud and authentication, **server and phone side**. Server: store the model, `/predict` API, receive results, accounts, notifications (done, see `cloud/README.md`). Phone side of accounts and notifications: (1) the Kotlin server client for all requests, with the login token attached and error handling (no internet, expired token); (2) login logic without a screen: Firebase sign-up / sign-in, then `PUT /me` (Zenon's login screen calls these functions); (3) receiving push: messaging service, sending the push token (`PUT /me/fcm-token`), notification permission, showing incoming notifications. |
 | *TBD* | 3-tier upgrade only: running the `/predict` server on the PC as edge + per-minute summaries edge → cloud (section 6.3). |
 
-### Devices
-- **Emilia: Samsung (Android)** → all real-device tests.
-- **Zenon and Nuno: iPhones, no Mac** → they develop and test on the **Android Emulator** in Android Studio.
-  The emulator can use the laptop webcam as its front camera (AVD settings → Camera Front: **Webcam0**), so the
-  camera/pose pipeline also runs there.
+### Order of the remaining work
+1. In parallel: Emilia Steps 8–9 · Nuno the server client, login logic and push receiving · Zenon the screens
+   (placeholder data until Nuno's client exists).
+2. Zenon connects his screens and the friend feature to Nuno's client. Agree the function names of the login
+   logic (Nuno) used by the login screen (Zenon) first.
+3. Together: end-to-end test with two accounts.
+
 
 ## 3. Decisions
 
@@ -60,7 +62,7 @@ Team project (3 people). This file is the shared source of truth for humans and 
 |---|---|---|
 | D1 | **Native Android, Kotlin**, Jetpack Compose UI. **iOS is out of scope**: two of us have iPhones but nobody has a Mac (Xcode, needed to build for iPhone, is macOS-only). Kotlin Multiplatform / Flutter / React Native rejected: all need a Mac for iOS too, and the course is taught in Kotlin. | Decided |
 | D2 | Pose detection runs **on the phone** (MediaPipe). Images/video are **never** sent to the cloud or edge; only the 9 landmark numbers. | Decided |
-| D3 | Where the good/bad classification runs: **on-device by default** (`LocalOnnxClassifier`, works offline, ~1 ms). A **cloud mode** (`RemoteClassifier` → Nuno's `/predict`) is built too, switchable in the app, used for the **on-device vs cloud comparison** required by the course. Later the same `RemoteClassifier` can point at the PC (edge mode, D8). Friend's 5 s task verification: on-device or cloud still **open**. | Decided (friend part open) |
+| D3 | Where the good/bad classification runs: **on-device by default** (`LocalOnnxClassifier`, works offline, ~1 ms). A **cloud mode** (`RemoteClassifier` → Nuno's `/predict`) is built too, switchable in the app, used for the **on-device vs cloud comparison** required by the course. Later the same `RemoteClassifier` can point at the PC (edge mode, D8). Friend's 5 s task verification: **in the cloud** (`POST /tasks/{id}/result`, the server runs the same model). | Decided |
 | D4 | Model format on the phone: **ONNX** (scaler + RandomForest exported together with `skl2onnx`), run with ONNX Runtime Android. The same `.onnx` file is what the cloud stores and serves. (LiteRT is for neural networks and can't run a scikit-learn RandomForest directly.)"ONNX Runtime 1.25.1 on Android (1.26/1.27 give wrong results). Decide from probabilities, not label. | Proposed |
 | D5 | MVP scope for Emilia: calibration + monitoring + red "Bad posture" sign at 3 s + 10-minute alert, with a **minimal UI just for testing**. **Not now:** profile list, avatars/GIF, sessions/statistics, overlay, polished UI (Zenon). | Decided |
 | D6 | **Two-level feedback.** (1) Bad posture ≥ 3 s → red "Bad posture" sign on screen only, **no vibration/sound**. (2) **10 min of continuous bad posture** → alert (MVP: simple on-screen alert dialog; later this event may also notify the friend). The alert fires **once per bad episode**; the 10-min timer resets as soon as posture is good again. | Decided |
@@ -306,10 +308,7 @@ sealed interface PostureEvent {
 - Phone at the real position. Repeat the `testp6` scenario (good/bad/good/bad, include mild slouching) and compare.
 - 1-hour battery/heat check while charging.
 
-### Step 7: Hand-off
-- Document `PostureState`/`PostureEvent` for Zenon and `PostureClassifier` + calibration JSON for Nuno.
-
-### Step 8: Cloud mode (2-tier) · 1 day, when Nuno's `/predict` exists
+### Step 8: Cloud mode (2-tier) · 1 day · server live at `https://posture-api-966260446085.europe-west8.run.app`
 - `RemoteClassifier(baseUrl)` using the batch API (5 samples once per second), server URL as a setting.
 - `TimedClassifier` wrapper: log per-classification latency (send → answer) to a CSV/log file.
 - Test-UI switch **On-device / Cloud**.
@@ -336,7 +335,6 @@ sealed interface PostureEvent {
 - Emulator (Zenon, Nuno): AVD → Camera Front: **Webcam0** to use the laptop webcam; host PC = `10.0.2.2`.
 
 ## 9. Open questions
-- D3 (friend part): is the friend's 5 s task verified on the phone or in the cloud?
 - 3-tier upgrade: who owns the edge part (running the server on the PC + summaries to the cloud)?
 
 ## 10. Status (update me)
@@ -350,7 +348,9 @@ sealed interface PostureEvent {
 - [x] Step 4: Calibration
 - [x] Step 5: Monitoring + alert
 - [x] Step 6: Real test
-- [ ] Step 7: Hand-off to Zenon / Nuno
-- [ ] Step 8: Cloud mode (needs Nuno's `/predict`)
+- [x] Cloud server deployed on Cloud Run (Nuno)
+- [ ] Phone side of accounts + push: server client, login logic, push receiving (Nuno)
+- [ ] Screens + friend feature connected to the server (Zenon)
+- [ ] Step 8: Cloud mode (server live)
 - [ ] Step 9: Evaluation (on-device vs cloud)
 - [ ] Step 10 (optional): 3-tier upgrade

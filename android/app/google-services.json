@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "966260446085",
+    "project_id": "mobilecloud-7dd8f",
+    "storage_bucket": "mobilecloud-7dd8f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:966260446085:android:9f660feb3a84904de7eaec",
+        "android_client_info": {
+          "package_name": "com.postureguard"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAVI6qBgLM-hxZYRVp-UtHJP-pPdf1dgBY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:966260446085:android:fb511ee6b5acd3fde7eaec",
+        "android_client_info": {
+          "package_name": "mobile.Cloud"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAVI6qBgLM-hxZYRVp-UtHJP-pPdf1dgBY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

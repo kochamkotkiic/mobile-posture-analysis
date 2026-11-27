@@ -18,7 +18,6 @@ Rules for coding agents in the Android project: [`android/AGENTS.md`](../android
 | 4 | Calibration | ✅ done | 2026-11-22 |
 | 5 | Monitoring screen + alerts | ✅ done | 2026-11-22 |
 | 6 | Real test (accuracy, battery, heat) | ✅ done | 2026-11-22 |
-| 7 | Hand-off to Zenon / Nuno | | |
 | 8 | Cloud mode (2-tier) | | |
 | 9 | Evaluation: on-device vs cloud | | |
 | 10 | Optional: 3-tier upgrade (PC as edge) | | |
@@ -484,6 +483,9 @@ Android: open `android/` in Android Studio → Sync → Run on the phone → pos
 
 ---
 
-## 7. Next: Step 7 (hand-off to Zenon / Nuno)
-- Guide for Zenon: `MonitorViewModel.postureState` / `events`, `PostureState` / `PostureEvent`, where the UI plugs in.
-- Guide for Nuno: `PostureClassifier` interface + `/predict` API, calibration JSON format, ONNX Runtime version note.
+## 7. Next: Step 8 (cloud mode)
+- `RemoteClassifier` calling `/predict/batch` on `https://posture-api-966260446085.europe-west8.run.app` (server address as a setting).
+- Latency logging: round trip vs `server_ms` (difference = network time).
+- On-device / Cloud switch in the test screen.
+
+Team split for the rest of the project (who connects the app to the cloud): SKILL.md, section 2.

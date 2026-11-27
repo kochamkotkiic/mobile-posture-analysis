@@ -4,7 +4,10 @@ import tempfile
 from pathlib import Path
 
 # Must be set before the app is imported: temp database, no real Firebase, dev tokens allowed.
-os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(), "test.db")
+# TEST_DATABASE_URL lets the same tests run against a real Postgres (a SEPARATE test database:
+# every test drops and recreates all tables). Default: a temporary SQLite file.
+os.environ["DATABASE_URL"] = os.environ.get(
+    "TEST_DATABASE_URL", "sqlite:///" + os.path.join(tempfile.mkdtemp(), "test.db"))
 os.environ["FIREBASE_ENABLED"] = "false"
 os.environ["DEV_AUTH"] = "true"
 os.environ["MIGRATE_ON_STARTUP"] = "false"   # tests build tables from the models; migrations tested separately

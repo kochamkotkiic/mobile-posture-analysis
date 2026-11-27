@@ -23,8 +23,11 @@ def test_rejects_wrong_length(client):
     assert client.post("/predict/batch", json={"samples": [[0.0] * 8]}).status_code == 422
 
 
-def test_health(client):
-    assert client.get("/health").json() == {"status": "ok"}
+def test_health_and_instance_header(client):
+    r = client.get("/health")
+    assert r.json()["status"] == "ok"
+    assert r.headers["x-instance-id"] == r.json()["instance"]
+    assert client.post("/predict", json={"features": [0.0] * 9}).headers["x-instance-id"] == r.json()["instance"]
 
 
 def test_model_info_and_download(client):

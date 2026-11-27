@@ -8,3 +8,4 @@ data/
 ui/
 node_modules/
 .git/
+**/secrets

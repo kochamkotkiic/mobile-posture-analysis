@@ -6,7 +6,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
-    model_path: Path = REPO_ROOT / "models" / "posture_model.onnx"
+    model_path: Path = REPO_ROOT / "models" / "posture_model.onnx"   # local copy (used when no bucket is set)
+    model_bucket: str | None = None           # Cloud Storage bucket holding the model, e.g. "mobilecloud-7dd8f-models"
+    model_object: str = "models/posture_model.onnx"   # path of the model inside the bucket
+    model_cache_path: Path = Path("/tmp/posture_model.onnx")       # where the downloaded model is kept
     max_batch: int = 100                      # max samples per /predict/batch request
 
     database_url: str = "sqlite:///./dev.db"  # cloud: postgresql+psycopg://user:pass@host/db

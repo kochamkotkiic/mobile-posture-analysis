@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)   // reads app/google-services.json
 }
 
 android {
@@ -57,6 +58,10 @@ dependencies {
     implementation(libs.mediapipe.tasks.vision)
     implementation(libs.onnxruntime.android)
     implementation(libs.androidx.datastore.preferences)
+    // Cloud: login + push notifications (no Analytics)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.messaging)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

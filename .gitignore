@@ -100,3 +100,4 @@ logs/
 cloud/*.db
 .pytest_cache/
 *-firebase-adminsdk-*.json
+cloud/secrets/

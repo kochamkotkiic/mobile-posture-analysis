@@ -1,13 +1,15 @@
 import time
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from . import auth
 from .config import settings
 from .db import run_migrations
 from .model import PostureModel
+from .model_store import resolve_model_path
 from .routers import alerts, friends, me, model_files, tasks
 
 Features = list[float]
@@ -35,9 +37,15 @@ class BatchResponse(BaseModel):
     server_ms: float
 
 
+# Random id of this server process. Every response carries it in the X-Instance-Id header, so the
+# load test can count how many instances Cloud Run started (= autoscaling made visible).
+INSTANCE_ID = uuid.uuid4().hex[:8]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.model = PostureModel(settings.model_path)   # load once
+    app.state.model_path = resolve_model_path()           # from the Cloud Storage bucket if configured
+    app.state.model = PostureModel(app.state.model_path)  # load once
     if settings.migrate_on_startup:
         run_migrations()
     auth.init_firebase()
@@ -49,9 +57,16 @@ for r in (me.router, friends.router, alerts.router, tasks.router, model_files.ro
     app.include_router(r)
 
 
+@app.middleware("http")
+async def add_instance_id(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Instance-Id"] = INSTANCE_ID
+    return response
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "instance": INSTANCE_ID}
 
 
 # /predict is public on purpose: the evaluation measures network + model only, no token check.

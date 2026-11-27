@@ -5,6 +5,8 @@
     <!-- PostureGuard: front camera for pose detection (images never leave the phone) -->
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Cloud: /predict, accounts, alerts (only the 9 numbers are sent, never images) -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"

@@ -7,6 +7,7 @@ from pathlib import Path
 os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(), "test.db")
 os.environ["FIREBASE_ENABLED"] = "false"
 os.environ["DEV_AUTH"] = "true"
+os.environ["MIGRATE_ON_STARTUP"] = "false"   # tests build tables from the models; migrations tested separately
 
 import pytest
 from fastapi.testclient import TestClient

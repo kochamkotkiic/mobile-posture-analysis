@@ -11,7 +11,7 @@ configured with environment variables (`app/config.py`).
 cd cloud
 python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
-python -m pytest -v                         # 21 tests, no Firebase needed
+python -m pytest -v                         # 24 tests, no Firebase needed
 
 # server without Firebase, with dev tokens (for testing from the emulator):
 FIREBASE_ENABLED=false DEV_AUTH=true uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
@@ -80,6 +80,26 @@ Dev mode (`DEV_AUTH=true`, local only): `Authorization: Bearer dev:<uid>:<email>
 - Friend task verified **in the cloud** (open question D3): the same ONNX model judges the uploaded samples.
 - A failed push never fails the request (logged, `notified` shows who actually got it).
 
+## Database and migrations
+
+Tables are defined in `app/tables.py`. The database structure is changed **only through Alembic
+migrations** (`migrations/versions/`): the server runs `upgrade head` itself at startup
+(`MIGRATE_ON_STARTUP=true`), so a fresh database gets all tables and an existing one only the new changes,
+keeping its data. The applied version is stored in the table `alembic_version`.
+
+When you change a table:
+```bash
+alembic revision --autogenerate -m "what changed"     # writes migrations/versions/<rev>_<slug>.py
+# read the generated file, then commit it together with the change to tables.py
+```
+`tests/test_migrations.py` fails if `tables.py` and the migrations disagree, so a forgotten migration
+can't slip through. Useful: `alembic current` (version of the database), `alembic history`,
+`alembic downgrade -1` (undo the last migration).
+
+Integrity is enforced by the database, not only by the code: friendships have a UNIQUE `pair_key`
+(both uids sorted), so two simultaneous requests can't create the same friendship twice
+(`test_race_gives_409_not_duplicate`).
+
 ## Deploy (Cloud Run, EU) – once
 1. **Database:** create a free Postgres on Neon or Supabase (EU region). Connection URL for this app:
    `postgresql+psycopg://USER:PASSWORD@HOST/DB?sslmode=require`
@@ -102,6 +122,8 @@ Dev mode (`DEV_AUTH=true`, local only): `Authorization: Bearer dev:<uid>:<email>
    gcloud run deploy posture-api --image $IMAGE --region europe-west8 --allow-unauthenticated \
      --set-env-vars "GOOGLE_CLOUD_PROJECT=<PROJECT_ID>,DATABASE_URL=postgresql+psycopg://…"
    ```
+   Add `--max-instances 1` while testing: each new instance runs the migrations at startup, and with
+   one instance two of them can't try it at the same time.
    `--allow-unauthenticated` only means Google doesn't block the requests; our own Firebase-token check
    still protects every 🔒 endpoint. Check with `curl https://<service-url>/health`.
    Token verification needs no extra permission. If pushes fail with a permission error, give the

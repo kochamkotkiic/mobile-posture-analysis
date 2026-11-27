@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from . import auth
 from .config import settings
-from .db import create_tables
+from .db import run_migrations
 from .model import PostureModel
 from .routers import alerts, friends, me, model_files, tasks
 
@@ -38,7 +38,8 @@ class BatchResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.model = PostureModel(settings.model_path)   # load once
-    create_tables()
+    if settings.migrate_on_startup:
+        run_migrations()
     auth.init_firebase()
     yield
 

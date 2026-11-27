@@ -8,3 +8,4 @@ httpx
 sqlmodel
 firebase-admin
 psycopg[binary]
+alembic

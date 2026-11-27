@@ -1,3 +1,11 @@
+import pytest
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session
+
+from app.db import engine
+from app.routers import friends as friends_module
+from app.tables import Friendship, make_pair_key
+
 from .conftest import A, B, C
 
 
@@ -56,3 +64,23 @@ def test_unfavorite_and_unfriend(friends_ab, pushes):
     assert c.delete(f"/friends/{fid}", headers=C).status_code == 404
     assert c.delete(f"/friends/{fid}", headers=B).status_code == 204
     assert c.get("/friends", headers=A).json() == []
+
+
+def test_database_refuses_duplicate_pair(users):
+    """The UNIQUE constraint itself, without the API: same pair in the other direction is rejected."""
+    with Session(engine) as s:
+        s.add(Friendship(requester_uid="alice", addressee_uid="bob", pair_key=make_pair_key("alice", "bob")))
+        s.commit()
+        s.add(Friendship(requester_uid="bob", addressee_uid="alice", pair_key=make_pair_key("bob", "alice")))
+        with pytest.raises(IntegrityError):
+            s.commit()
+
+
+def test_race_gives_409_not_duplicate(users, monkeypatch):
+    """Simulates two simultaneous requests: both pass the 'already exists?' check (we force it to say no).
+    The second insert must still be refused -> 409, and only one row exists."""
+    c = users
+    monkeypatch.setattr(friends_module, "find_friendship", lambda s, a, b: None)
+    assert c.post("/friends", headers=A, json={"email": "bob@test.com"}).status_code == 201
+    assert c.post("/friends", headers=B, json={"email": "alice@test.com"}).status_code == 409
+    assert len(c.get("/friends", headers=A).json()) == 1

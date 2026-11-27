@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     max_batch: int = 100                      # max samples per /predict/batch request
 
     database_url: str = "sqlite:///./dev.db"  # cloud: postgresql+psycopg://user:pass@host/db
+    migrate_on_startup: bool = True           # run Alembic migrations ("upgrade head") when the server starts
 
     firebase_enabled: bool = True             # False = no Firebase calls (tests, offline dev)
     dev_auth: bool = False                    # True = accept "Bearer dev:<uid>:<email>" tokens. NEVER in the cloud.

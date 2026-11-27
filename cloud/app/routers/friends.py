@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, or_, and_
 
 from .. import push
 from ..db import get_session
-from ..tables import Friendship, User
+from ..tables import Friendship, User, make_pair_key
 from .deps import registered_user
 from .me import public_profile
 
@@ -20,9 +21,7 @@ class FavoriteIn(BaseModel):
 
 
 def find_friendship(s: Session, a: str, b: str) -> Friendship | None:
-    return s.exec(select(Friendship).where(or_(
-        and_(Friendship.requester_uid == a, Friendship.addressee_uid == b),
-        and_(Friendship.requester_uid == b, Friendship.addressee_uid == a)))).first()
+    return s.exec(select(Friendship).where(Friendship.pair_key == make_pair_key(a, b))).first()
 
 
 def are_friends(s: Session, a: str, b: str) -> bool:
@@ -59,10 +58,19 @@ def send_request(body: FriendRequestIn, me: User = Depends(registered_user), s: 
         raise HTTPException(404, "no user with that email")
     if other.uid == me.uid:
         raise HTTPException(422, "you cannot add yourself")
+    # Fast path for the normal case: a friendly 409 without trying the insert.
     if find_friendship(s, me.uid, other.uid):
         raise HTTPException(409, "request or friendship already exists")
-    f = Friendship(requester_uid=me.uid, addressee_uid=other.uid)
-    s.add(f); s.commit(); s.refresh(f)
+    # Race case: two requests can both pass the check above. The UNIQUE pair_key makes the
+    # database reject the second insert, and we turn that into the same 409.
+    f = Friendship(requester_uid=me.uid, addressee_uid=other.uid,
+                   pair_key=make_pair_key(me.uid, other.uid))
+    try:
+        s.add(f); s.commit()
+    except IntegrityError:
+        s.rollback()
+        raise HTTPException(409, "request or friendship already exists")
+    s.refresh(f)
     push.send(other.fcm_token, "New friend request",
               f"{me.display_name or me.email} wants to be your posture buddy",
               {"type": "friend_request", "friendship_id": f.id})

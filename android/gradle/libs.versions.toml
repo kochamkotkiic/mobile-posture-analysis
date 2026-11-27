@@ -15,7 +15,7 @@ onnxruntime = "1.25.1"  # NOT 1.26.x or 1.27.x: wrong results for our RandomFore
 datastore = "1.3.0"
 # Cloud part (Nuno): Firebase Auth (login) + Cloud Messaging (push). Versions from the Firebase console.
 googleServices = "4.6.0"
-firebaseBom = "35.2.0"
+firebaseBom = "34.19.0"  # NOT 35.x: firebase-auth 25 is compiled with Kotlin 2.4, this project uses Kotlin 2.2
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

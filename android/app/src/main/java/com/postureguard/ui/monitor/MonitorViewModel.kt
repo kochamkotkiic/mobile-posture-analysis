@@ -242,10 +242,13 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
         _postureState.value = result?.update?.state
         sessionStats.onFrame(frame.timestampMs, result?.update?.state)
         if (_challengeFrames.subscriptionCount.value > 0) {
-            val normalized = if (result?.prediction != null) {
+            val visible = result?.update?.state?.personVisible == true
+            // Every frame with a person in view (not only the ~5/s the model ran on): slow devices such as the
+            // emulator (~3 FPS) would otherwise not reach the server's minimum of 15 samples in 5 s.
+            val normalized = if (visible) {
                 pipeline.calibration?.let { cal -> frame.landmarks?.let { cal.normalize(FeatureExtractor.extract(it)) } }
             } else null
-            _challengeFrames.tryEmit(ChallengeFrame(frame.timestampMs, result?.update?.state?.personVisible == true, normalized))
+            _challengeFrames.tryEmit(ChallengeFrame(frame.timestampMs, visible, normalized))
         }
 
         _state.update {

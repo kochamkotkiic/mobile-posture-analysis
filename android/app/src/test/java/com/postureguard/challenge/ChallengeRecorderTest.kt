@@ -9,16 +9,18 @@ class ChallengeRecorderTest {
 
     private fun features(v: Float) = FloatArray(9) { v }
 
-    /** Frames every 40 ms (25 FPS); the model runs on every 5th frame (5x/s), like the real pipeline. */
-    private fun ChallengeRecorder.feed(fromMs: Long, toMs: Long, visible: Boolean = true): ChallengeRecorder.Status {
+    /** Frames every [stepMs] from [fromMs] to [toMs] (inclusive), with features whenever someone is visible. */
+    private fun ChallengeRecorder.feed(
+        fromMs: Long,
+        toMs: Long,
+        stepMs: Long = 40,
+        visible: Boolean = true,
+    ): ChallengeRecorder.Status {
         var t = fromMs
         var last = current
-        var i = 0
         while (t <= toMs) {
-            val f = if (visible && i % 5 == 0) features(t.toFloat()) else null
-            last = onFrame(ChallengeFrame(t, visible, f))
-            t += 40
-            i++
+            last = onFrame(ChallengeFrame(t, visible, if (visible) features(t.toFloat()) else null))
+            t += stepMs
         }
         return last
     }
@@ -51,28 +53,54 @@ class ChallengeRecorderTest {
         val r = ChallengeRecorder(countdownMs = 3_000, durationMs = 5_000)
         r.start()
         r.feed(0, 2_960)                     // countdown: ignored
-        r.feed(3_000, 8_000)                 // 5 s recording
+        r.feed(3_000, 8_000)                 // 5 s recording at 25 FPS
         val done = r.onFrame(ChallengeFrame(8_040, true, features(9f))) as ChallengeRecorder.Status.Done
-        // 3000..8000 every 40 ms = 126 frames, every 5th has features -> 26 samples (~5 per second)
-        assertEquals(26, done.samples.size)
+        assertEquals(126, done.samples.size) // every visible frame: 3000..8000 every 40 ms
         assertTrue(done.samples.all { it[0] in 3_000f..8_000f })
         assertEquals(1f, done.visibleFraction, 1e-6f)
     }
 
     @Test
-    fun framesWithoutAPersonGiveFewSamples() {
-        val r = ChallengeRecorder(countdownMs = 0, durationMs = 5_000)
+    fun slowDeviceRecordsLongerUntilEnoughSamples() {
+        // The emulator: ~2.5 pose frames per second -> only ~12 samples in 5 s, the server needs 15
+        val r = ChallengeRecorder(countdownMs = 0, durationMs = 5_000, minSamples = 15)
         r.start()
-        r.feed(0, 2_480, visible = true)
-        r.feed(2_520, 5_000, visible = false)
-        val done = r.onFrame(ChallengeFrame(5_040, false, null)) as ChallengeRecorder.Status.Done
-        assertTrue(done.samples.size < 15)  // not enough for the server (>= 15 needed)
-        assertEquals(0.5f, done.visibleFraction, 0.02f)
+        assertTrue(r.feed(0, 5_200, stepMs = 400) is ChallengeRecorder.Status.Recording) // 14 samples: keep going
+        val done = r.feed(5_600, 6_400, stepMs = 400) as ChallengeRecorder.Status.Done
+        assertEquals(15, done.samples.size)
+    }
+
+    @Test
+    fun givesUpWhenNobodyIsVisible() {
+        val r = ChallengeRecorder(countdownMs = 0, durationMs = 5_000, minSamples = 15, maxExtraMs = 5_000)
+        r.start()
+        r.feed(0, 1_000, visible = true)               // 26 frames
+        r.feed(1_040, 10_000, visible = false)         // then out of view
+        val done = r.onFrame(ChallengeFrame(10_040, false, null)) as ChallengeRecorder.Status.Done
+        assertEquals(26, done.samples.size)            // enough samples (done after 5 s), but...
+        assertEquals(26f / 126f, done.visibleFraction, 1e-4f) // ...only 1 of the 5 s in view
+    }
+
+    @Test
+    fun tooFewSamplesAfterTheExtraTime() {
+        val r = ChallengeRecorder(countdownMs = 0, durationMs = 5_000, minSamples = 15, maxExtraMs = 5_000)
+        r.start()
+        r.feed(0, 10_000, stepMs = 1_000) // 1 FPS: 11 samples in 10 s
+        val done = r.onFrame(ChallengeFrame(10_040, true, null)) as ChallengeRecorder.Status.Done
+        assertEquals(11, done.samples.size)
+    }
+
+    @Test
+    fun capsAtTheServerLimit() {
+        val r = ChallengeRecorder(countdownMs = 0, durationMs = 5_000, maxSamples = 200)
+        r.start()
+        val done = r.feed(0, 5_100, stepMs = 10) as ChallengeRecorder.Status.Done // 100 FPS
+        assertEquals(200, done.samples.size)
     }
 
     @Test
     fun samplesAreCopied() {
-        val r = ChallengeRecorder(countdownMs = 0, durationMs = 1_000)
+        val r = ChallengeRecorder(countdownMs = 0, durationMs = 1_000, minSamples = 1)
         r.start()
         val f = features(1f)
         r.onFrame(ChallengeFrame(0, true, f))
@@ -83,7 +111,7 @@ class ChallengeRecorderTest {
 
     @Test
     fun startAgainClearsAndCancelStops() {
-        val r = ChallengeRecorder(countdownMs = 0, durationMs = 1_000)
+        val r = ChallengeRecorder(countdownMs = 0, durationMs = 1_000, minSamples = 1)
         r.start()
         r.feed(0, 500)
         r.start()

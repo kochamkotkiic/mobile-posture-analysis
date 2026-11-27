@@ -143,14 +143,15 @@ class ChallengeViewModel(application: Application) : AndroidViewModel(applicatio
             is ChallengeRecorder.Status.Countdown -> setPhase(ChallengePhase.Countdown(status.secondsLeft))
             is ChallengeRecorder.Status.Recording ->
                 setPhase(ChallengePhase.Recording(status.secondsLeft, status.progress, status.samples))
-            is ChallengeRecorder.Status.Done -> submit(status.samples)
+            is ChallengeRecorder.Status.Done -> submit(status.samples, status.visibleFraction)
             ChallengeRecorder.Status.Idle -> Unit
         }
     }
 
-    private fun submit(samples: List<FloatArray>) {
+    private fun submit(samples: List<FloatArray>, visibleFraction: Float) {
         val challenge = _state.value.challenge ?: return
-        if (samples.size < MIN_SAMPLES) {
+        Log.i(TAG, "Recorded ${samples.size} samples, in view ${(visibleFraction * 100).roundToInt()}% of the frames")
+        if (samples.size < MIN_SAMPLES || visibleFraction < MIN_VISIBLE_FRACTION) {
             // Don't waste the challenge: the server would fail it. Let the user try again.
             setPhase(ChallengePhase.Problem("We couldn't see you clearly. Keep your head and shoulders in view and try again.", canRetry = true))
             return
@@ -190,5 +191,7 @@ class ChallengeViewModel(application: Application) : AndroidViewModel(applicatio
         const val POLL_MS = 15_000L
         /** Same minimum as the server (cloud/app/config.py task_min_samples). */
         const val MIN_SAMPLES = 15
+        /** The user must be in view for most of the recording (otherwise 1 good second could pass). */
+        const val MIN_VISIBLE_FRACTION = 0.7f
     }
 }

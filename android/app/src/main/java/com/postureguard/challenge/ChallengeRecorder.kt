@@ -4,8 +4,8 @@ import kotlin.math.ceil
 
 /**
  * One processed camera frame, as published by MonitorViewModel.challengeFrames (read-only hook).
- * [normalizedFeatures] = the 9 features minus calibration, only on frames where the model ran (~5x/s),
- * otherwise null. These are exactly the numbers the phone's own model judged.
+ * [normalizedFeatures] = the 9 features minus calibration, on every frame with a person in view
+ * (null when nobody is visible or there is no calibration).
  */
 class ChallengeFrame(
     val timestampMs: Long,
@@ -18,11 +18,17 @@ class ChallengeFrame(
  * the desk and must sit back), then [durationMs] of recording. Plain Kotlin: time comes from the frames, so it is
  * unit-tested on the JVM, like the calibration collector.
  *
+ * The server needs at least [minSamples] samples. A slow device (the emulator runs pose detection at ~3 FPS) may
+ * not reach that in 5 s, so recording continues for up to [maxExtraMs] more until it does.
+ *
  * Usage: [start], then [onFrame] for every frame until it returns [Status.Done].
  */
 class ChallengeRecorder(
     private val countdownMs: Long = 3_000,
     private val durationMs: Long = 5_000,
+    private val minSamples: Int = 15,
+    private val maxExtraMs: Long = 5_000,
+    private val maxSamples: Int = 200, // server limit per upload
 ) {
     sealed interface Status {
         data object Idle : Status
@@ -61,20 +67,23 @@ class ChallengeRecorder(
         if (!isActive) return status
         val start = startMs ?: frame.timestampMs.also { startMs = it }
         val t = frame.timestampMs - start
-        status = when {
-            t < countdownMs -> Status.Countdown(secondsOf(countdownMs - t))
-            t <= countdownMs + durationMs -> {
-                frames++
-                if (frame.personVisible) visibleFrames++
-                frame.normalizedFeatures?.let { samples += it.copyOf() }
-                val elapsed = t - countdownMs
-                Status.Recording(
-                    progress = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f),
-                    samples = samples.size,
-                    secondsLeft = secondsOf(durationMs - elapsed),
-                )
-            }
-            else -> Status.Done(samples.toList(), if (frames == 0) 0f else visibleFrames.toFloat() / frames)
+        if (t < countdownMs) {
+            status = Status.Countdown(secondsOf(countdownMs - t))
+            return status
+        }
+        val elapsed = t - countdownMs
+        val finished = (elapsed > durationMs && samples.size >= minSamples) || elapsed > durationMs + maxExtraMs
+        status = if (finished) {
+            Status.Done(samples.toList(), if (frames == 0) 0f else visibleFrames.toFloat() / frames)
+        } else {
+            frames++
+            if (frame.personVisible) visibleFrames++
+            if (samples.size < maxSamples) frame.normalizedFeatures?.let { samples += it.copyOf() }
+            Status.Recording(
+                progress = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f),
+                samples = samples.size,
+                secondsLeft = secondsOf(durationMs - elapsed).coerceAtLeast(1), // "1 s" while waiting for samples
+            )
         }
         return status
     }

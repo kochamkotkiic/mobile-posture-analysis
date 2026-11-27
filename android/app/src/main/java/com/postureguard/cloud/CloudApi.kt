@@ -1,5 +1,6 @@
 package com.postureguard.cloud
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -84,9 +85,14 @@ class CloudApi(private val baseUrl: String, private val token: String?) {
             val text = (if (status in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
                 .orEmpty()
-            if (status !in 200..299) throw CloudException(status, errorMessage(status, text))
+            if (status !in 200..299) {
+                Log.w(TAG, "$method $path -> HTTP $status: $text")
+                throw CloudException(status, errorMessage(status, text))
+            }
             text
         } catch (e: IOException) {
+            // e.g. server not running, wrong address, or http:// blocked by the network security config
+            Log.w(TAG, "$method $url failed: $e")
             throw CloudException(0, "Can't reach the server at $baseUrl")
         } finally {
             connection.disconnect()
@@ -128,6 +134,7 @@ class CloudApi(private val baseUrl: String, private val token: String?) {
     private fun JSONObject.optStringOrNull(key: String): String? = if (isNull(key)) null else optString(key)
 
     private companion object {
+        const val TAG = "CloudApi"
         const val CONNECT_TIMEOUT_MS = 5_000
         const val READ_TIMEOUT_MS = 10_000
     }

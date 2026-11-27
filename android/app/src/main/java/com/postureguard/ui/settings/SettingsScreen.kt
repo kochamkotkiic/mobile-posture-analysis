@@ -172,7 +172,7 @@ private fun ServerUrlField(savedUrl: String, onSave: (String) -> Unit) {
         onValueChange = { edited = it },
         modifier = Modifier.fillMaxWidth(),
         label = { Text("Server address") },
-        supportingText = { Text("Emulator: http://10.0.2.2:8000 · otherwise the cloud URL from Nuno") },
+        supportingText = { Text("Local server: http://10.0.2.2:8000, or http://localhost:8000 after \"adb reverse tcp:8000 tcp:8000\" · cloud: Nuno's https URL") },
         singleLine = true,
         shape = MaterialTheme.shapes.medium,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),

@@ -81,10 +81,8 @@ fun FriendsScreen(viewModel: FriendsViewModel, onClose: () -> Unit, modifier: Mo
             val account = state.account
             when {
                 !state.accountLoaded -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                account == null -> SignInForm(state.signingIn, viewModel::signIn)
+                account == null -> Unit // the sign-in form is in the right column
                 else -> {
-                    AddFriendForm(state.addingFriend, state.info, viewModel::addFriend)
-                    Gap(20.dp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         InitialAvatar(account.displayName.ifBlank { account.email }, size = 32.dp)
                         Spacer(Modifier.width(10.dp))
@@ -100,25 +98,32 @@ fun FriendsScreen(viewModel: FriendsViewModel, onClose: () -> Unit, modifier: Mo
                 Gap(12.dp)
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = StatusColors.Bad)
             }
+            state.info?.let {
+                Gap(12.dp)
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = StatusColors.Good)
+            }
         }
         Spacer(Modifier.width(32.dp))
 
-        // --- Right column -----------------------------------------------------------------------------
+        // --- Right column: forms on top (buttons always visible), then the lists ------------------------
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            if (state.account == null) {
-                Panel(Modifier.fillMaxWidth()) {
-                    Column {
-                        Text("Sit better together", style = MaterialTheme.typography.titleLarge)
-                        Gap(4.dp)
-                        Text(
-                            "Sign in to add friends. Your camera image is never shared, only the fact that a " +
-                                "10-minute alert happened and your challenge results.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+            if (!state.accountLoaded) {
+                // still reading the saved account (a fraction of a second)
+            } else if (state.account == null) {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text("Sign in to add friends", style = MaterialTheme.typography.titleLarge)
+                    Gap(4.dp)
+                    Text(
+                        "Your camera image is never shared, only that a 10-minute alert happened and your challenge results.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Gap(16.dp)
+                    SignInForm(state.signingIn, viewModel::signIn)
                 }
             } else {
+                AddFriendForm(state.addingFriend, state.info, viewModel::addFriend)
+                Gap(16.dp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SectionLabel("Your people", Modifier.weight(1f))
                     if (state.loading) {
@@ -226,22 +231,26 @@ private fun SignInForm(signingIn: Boolean, onSignIn: (String, String) -> Unit) {
     var email by rememberSaveable { mutableStateOf("") }
     val focus = LocalFocusManager.current
 
-    SectionLabel("Sign in")
-    Gap(8.dp)
-    OutlinedTextField(
-        value = name, onValueChange = { name = it }, modifier = Modifier.fillMaxWidth(),
-        label = { Text("Your name") }, singleLine = true, shape = MaterialTheme.shapes.medium,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-    )
-    Gap(8.dp)
-    OutlinedTextField(
-        value = email, onValueChange = { email = it }, modifier = Modifier.fillMaxWidth(),
-        label = { Text("Email") }, singleLine = true, shape = MaterialTheme.shapes.medium,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); onSignIn(name, email) }),
-    )
-    Gap(12.dp)
-    PrimaryButton(if (signingIn) "Signing in…" else "Continue", onClick = { onSignIn(name, email) }, enabled = !signingIn)
+    // Landscape: everything on one row, so the button can't end up below the fold
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = name, onValueChange = { name = it }, modifier = Modifier.weight(1f),
+            label = { Text("Your name") }, singleLine = true, shape = MaterialTheme.shapes.medium,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+        )
+        OutlinedTextField(
+            value = email, onValueChange = { email = it }, modifier = Modifier.weight(1.3f),
+            label = { Text("Email") }, singleLine = true, shape = MaterialTheme.shapes.medium,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); onSignIn(name, email) }),
+        )
+        PrimaryButton(
+            if (signingIn) "Signing in…" else "Sign in",
+            onClick = { focus.clearFocus(); onSignIn(name, email) },
+            modifier = Modifier.padding(top = 8.dp), // line up with the text boxes (their label sits above)
+            enabled = !signingIn && email.isNotBlank(),
+        )
+    }
     Gap(6.dp)
     Text(
         "Test sign-in (server in dev mode). Real accounts come with Firebase.",
@@ -256,18 +265,19 @@ private fun AddFriendForm(adding: Boolean, info: String?, onAdd: (String) -> Uni
     // Clear the field after a successful request
     LaunchedEffect(info) { if (info?.startsWith("Request sent") == true) email = "" }
 
-    SectionLabel("Add a friend")
-    Gap(8.dp)
-    OutlinedTextField(
-        value = email, onValueChange = { email = it }, modifier = Modifier.fillMaxWidth(),
-        label = { Text("Friend's email") }, singleLine = true, shape = MaterialTheme.shapes.medium,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Send),
-        keyboardActions = KeyboardActions(onSend = { onAdd(email) }),
-    )
-    Gap(8.dp)
-    SecondaryButton(if (adding) "Sending…" else "Send request", onClick = { onAdd(email) }, enabled = !adding && email.isNotBlank())
-    info?.let {
-        Gap(8.dp)
-        Text(it, style = MaterialTheme.typography.bodyMedium, color = StatusColors.Good)
+    val focus = LocalFocusManager.current
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = email, onValueChange = { email = it }, modifier = Modifier.weight(1f),
+            label = { Text("Add a friend by email") }, singleLine = true, shape = MaterialTheme.shapes.medium,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = { focus.clearFocus(); onAdd(email) }),
+        )
+        PrimaryButton(
+            if (adding) "Sending…" else "Send request",
+            onClick = { focus.clearFocus(); onAdd(email) },
+            modifier = Modifier.padding(top = 8.dp),
+            enabled = !adding && email.isNotBlank(),
+        )
     }
 }

@@ -93,3 +93,11 @@ config_local.json
 # ============================================
 *.log
 logs/
+
+# ============================================
+# Cloud server (cloud/)
+# ============================================
+cloud/*.db
+.pytest_cache/
+*-firebase-adminsdk-*.json
+cloud/secrets/

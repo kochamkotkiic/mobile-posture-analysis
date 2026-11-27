@@ -1,194 +1,297 @@
 package com.postureguard.ui.monitor
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleOwner
 import com.postureguard.posture.Prediction
-import com.postureguard.ui.common.CameraPreview
-import com.postureguard.ui.common.LandmarkOverlay
+import com.postureguard.ui.common.CameraCard
 import com.postureguard.ui.common.RequireCameraPermission
+import com.postureguard.ui.components.Gap
+import com.postureguard.ui.components.Panel
+import com.postureguard.ui.components.PrimaryButton
+import com.postureguard.ui.components.SecondaryButton
+import com.postureguard.ui.components.SectionLabel
+import com.postureguard.ui.components.StatTile
+import com.postureguard.ui.components.StatusDot
+import com.postureguard.ui.components.TextLink
+import com.postureguard.ui.formatClock
+import com.postureguard.ui.formatShortDuration
+import com.postureguard.ui.theme.Black
+import com.postureguard.ui.theme.Grey500
+import com.postureguard.ui.theme.Grey700
+import com.postureguard.ui.theme.StatusColors
+import com.postureguard.ui.theme.White
 import java.util.Locale
+import kotlin.math.roundToInt
 
-private val Green = Color(0xFF2E7D32)
-private val Red = Color(0xFFC62828)
-private val Grey = Color(0xFF616161)
-private val Blue = Color(0xFF1565C0)
-private val Orange = Color(0xFFEF6C00)
-
-/** Step 5: live monitoring (minimal testing UI; the polished UI is Zenon's). */
+/**
+ * Home screen while the phone watches the user: camera on the left, a calm status panel on the right.
+ * Developer tools (FPS, test mode, Step 6 recording) only when switched on in Settings.
+ */
 @Composable
 fun MonitorScreen(
     viewModel: MonitorViewModel,
     lifecycleOwner: LifecycleOwner,
+    developerTools: Boolean,
     onRecalibrate: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenFriends: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Shown at the top of the panel, e.g. the friend challenge card. */
+    topContent: @Composable () -> Unit = {},
 ) {
     LaunchedEffect(Unit) { viewModel.onScreenShown() }
 
     RequireCameraPermission(modifier) {
         val state by viewModel.state.collectAsState()
         val alertVisible by viewModel.alertVisible.collectAsState()
-        val aspect = if (state.imageWidth > 0 && state.imageHeight > 0) state.imageWidth.toFloat() / state.imageHeight else 4f / 3f
+        val look = statusLook(state)
 
-        Row(modifier.fillMaxSize().padding(12.dp)) {
-            Box(Modifier.fillMaxHeight().aspectRatio(aspect, matchHeightConstraintsFirst = true)) {
-                CameraPreview(viewModel.analysisExecutor, viewModel.analyzer, lifecycleOwner, Modifier.fillMaxSize())
-                LandmarkOverlay(state.nose, state.leftShoulder, state.rightShoulder, Modifier.fillMaxSize())
+        Row(modifier.fillMaxSize().padding(16.dp)) {
+            CameraCard(
+                analysisExecutor = viewModel.analysisExecutor,
+                analyzer = viewModel.analyzer,
+                lifecycleOwner = lifecycleOwner,
+                imageWidth = state.imageWidth,
+                imageHeight = state.imageHeight,
+                landmarks = if (developerTools) Triple(state.nose, state.leftShoulder, state.rightShoulder) else null,
+                accent = if (look.isBad) StatusColors.Bad else Color.Transparent,
+            ) {
+                LiveChip(look.dot, Modifier.align(Alignment.TopStart).padding(14.dp))
             }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                state.recording?.let { RecordingCard(it) }
-                StatusBox(state)
-                Spacer(Modifier.height(12.dp))
-                Details(state)
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = state.testMode, onCheckedChange = viewModel::setTestMode)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Test mode: alert after 30 s instead of 10 min")
+            Spacer(Modifier.width(20.dp))
+
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("PostureGuard", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    TextLink("Friends", onClick = onOpenFriends)
+                    TextLink("Settings", onClick = onOpenSettings)
                 }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onRecalibrate) { Text("Recalibrate") }
-                Text("Recalibrate whenever you move the phone or the chair.", style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(12.dp))
-                RecordingControls(state, viewModel)
-                Spacer(Modifier.height(12.dp))
-                Stats(state)
+                Gap(12.dp)
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    topContent()
+                    state.recording?.let {
+                        RecordingCard(it)
+                        Gap(12.dp)
+                    }
+                    StatusPanel(look)
+                    Gap(12.dp)
+                    SessionTiles(state)
+                    if (developerTools) {
+                        Gap(12.dp)
+                        DeveloperPanel(state, viewModel)
+                    }
+                }
+                Gap(12.dp)
+                SecondaryButton("Recalibrate", onClick = onRecalibrate)
             }
         }
 
-        if (alertVisible) {
-            AlertDialog(
-                onDismissRequest = viewModel::dismissAlert,
-                confirmButton = { TextButton(onClick = viewModel::dismissAlert) { Text("OK") } },
-                title = { Text("Time for a break") },
-                text = {
-                    val time = if (state.testMode) "30 seconds (test mode)" else "10 minutes"
-                    Text("You have been sitting with bad posture for $time. Stand up, stretch for a moment, then sit up straight.")
-                },
-            )
+        if (alertVisible) BreakDialog(testMode = state.testMode, onDismiss = viewModel::dismissAlert)
+    }
+}
+
+// --- Status ------------------------------------------------------------------------------------------
+
+/** Everything that changes with the posture status: colours and texts. */
+private data class StatusLook(
+    val label: String,
+    val title: String,
+    val detail: String?,
+    val dot: Color,
+    val background: Color?, // null = default panel colour
+    val content: Color?,
+    val isBad: Boolean = false,
+)
+
+private fun statusLook(state: MonitorUiState): StatusLook {
+    val posture = state.posture
+    return when {
+        state.error != null -> StatusLook("Problem", "Something went wrong", state.error, StatusColors.Bad, null, null)
+        !state.modelReady || posture == null ->
+            StatusLook("Starting", "Getting ready…", "Starting the camera and the posture model.", Grey500, null, null)
+        !posture.personVisible ->
+            StatusLook("Paused", "No one in view", "Sit in front of the phone so your head and shoulders are visible.", Grey500, null, null)
+        posture.badPostureShown -> StatusLook(
+            "Bad posture", "Sit up straight",
+            "Slouching for ${formatClock(posture.badSeconds.toLong())}",
+            White, StatusColors.Bad, White, isBad = true,
+        )
+        else -> StatusLook("Posture", "Looking good", "You'll see it here if you start to slouch.", StatusColors.Good, null, null)
+    }
+}
+
+@Composable
+private fun StatusPanel(look: StatusLook) {
+    val background by animateColorAsState(look.background ?: MaterialTheme.colorScheme.surfaceVariant, label = "status-bg")
+    val content by animateColorAsState(look.content ?: MaterialTheme.colorScheme.onSurface, label = "status-fg")
+    Panel(Modifier.fillMaxWidth(), color = background, contentColor = content) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(look.dot)
+                Spacer(Modifier.width(8.dp))
+                SectionLabel(look.label, color = content.copy(alpha = 0.75f))
+            }
+            Gap(8.dp)
+            Text(look.title, style = MaterialTheme.typography.headlineLarge, color = content)
+            look.detail?.let {
+                Gap(4.dp)
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = content.copy(alpha = 0.75f))
+            }
         }
     }
 }
 
-/** Green "Good" / red "Bad posture" (after 3 s, D6) / grey when nobody is visible. */
+/** Small "● Live" pill on the camera; the dot has the status colour. */
 @Composable
-private fun StatusBox(state: MonitorUiState) {
-    val posture = state.posture
-    val error = state.error
-    val (text, color) = when {
-        error != null -> error to Red
-        !state.modelReady -> "Loading the model…" to Grey
-        posture == null -> "Starting…" to Grey
-        !posture.personVisible -> "No one detected" to Grey
-        posture.badPostureShown -> "Bad posture" to Red
-        else -> "Good" to Green
-    }
-    Box(
-        Modifier.fillMaxWidth().background(color, RoundedCornerShape(12.dp)).padding(vertical = 20.dp),
-        contentAlignment = Alignment.Center,
+private fun LiveChip(dot: Color, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .clip(CircleShape)
+            .background(Black.copy(alpha = 0.55f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, color = Color.White, style = MaterialTheme.typography.headlineLarge)
+        StatusDot(dot, size = 8.dp)
+        Spacer(Modifier.width(6.dp))
+        Text("Live", style = MaterialTheme.typography.labelMedium, color = White)
     }
 }
 
 @Composable
-private fun Details(state: MonitorUiState) {
-    val posture = state.posture ?: return
-    if (posture.personVisible && posture.smoothedLabel == Prediction.BAD) {
-        Text(fmt("Bad posture for %.1f s", posture.badSeconds), style = MaterialTheme.typography.titleMedium)
-    } else {
-        Text("Posture OK", style = MaterialTheme.typography.titleMedium)
-    }
-    val alertAt = if (state.testMode) "30 s" else "10 min"
-    Text("Sign after 3 s of bad posture · alert after $alertAt without a break", style = MaterialTheme.typography.bodySmall)
-    state.lastPrediction?.let {
-        val label = if (it.label == Prediction.BAD) "bad" else "good"
-        Text(fmt("Last model answer: %s (%.0f%%)", label, it.confidence * 100), style = MaterialTheme.typography.bodySmall)
+private fun SessionTiles(state: MonitorUiState) {
+    val session = state.session
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatTile(formatShortDuration(session.trackedMs / 1000), "Tracked")
+        StatTile(session.goodFraction?.let { "${(it * 100).roundToInt()}%" } ?: "–", "Good posture")
+        StatTile("${session.alerts}", if (session.alerts == 1) "Break" else "Breaks")
     }
 }
 
 @Composable
-private fun Stats(state: MonitorUiState) {
-    Text(
-        fmt(
-            "Pose %.1f FPS · model %.1f×/s · %.2f ms per model run",
-            state.poseFps, state.classificationsPerSecond, state.classifyMs,
-        ),
-        style = MaterialTheme.typography.bodySmall,
-        color = Grey,
+private fun BreakDialog(testMode: Boolean, onDismiss: () -> Unit) {
+    val time = if (testMode) "30 seconds (test mode)" else "10 minutes"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Time for a break", style = MaterialTheme.typography.headlineMedium) },
+        text = {
+            Text(
+                "You've been slouching for $time. Stand up, stretch for a minute, then sit back up straight.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        },
+        confirmButton = { PrimaryButton("Got it", onClick = onDismiss, modifier = Modifier) },
     )
 }
 
-private fun fmt(format: String, vararg args: Any) = String.format(Locale.US, format, *args)
+// --- Developer tools (Step 5/6 test UI, kept for the evaluation) ---------------------------------------
 
-// --- Step 6: guided test / recording ------------------------------------------------------------------
+@Composable
+private fun DeveloperPanel(state: MonitorUiState, viewModel: MonitorViewModel) {
+    Panel(Modifier.fillMaxWidth()) {
+        Column {
+            SectionLabel("Developer")
+            Gap(8.dp)
+            val muted = MaterialTheme.colorScheme.onSurfaceVariant
+            Text(
+                fmt("Pose %.1f FPS · model %.1f×/s · %.2f ms", state.poseFps, state.classificationsPerSecond, state.classifyMs),
+                style = MaterialTheme.typography.bodySmall, color = muted,
+            )
+            state.posture?.let {
+                Text(
+                    fmt("Smoothed: %s · bad for %.1f s", if (it.smoothedLabel == Prediction.BAD) "bad" else "good", it.badSeconds),
+                    style = MaterialTheme.typography.bodySmall, color = muted,
+                )
+            }
+            state.lastPrediction?.let {
+                Text(
+                    fmt("Last model answer: %s (%.0f%%)", if (it.label == Prediction.BAD) "bad" else "good", it.confidence * 100),
+                    style = MaterialTheme.typography.bodySmall, color = muted,
+                )
+            }
+            Gap(8.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Test mode", style = MaterialTheme.typography.titleSmall)
+                    Text("Break reminder after 30 s instead of 10 min", style = MaterialTheme.typography.bodySmall, color = muted)
+                }
+                Switch(checked = state.testMode, onCheckedChange = viewModel::setTestMode)
+            }
+            Gap(12.dp)
+            if (state.recording == null) {
+                SecondaryButton("Start guided test (5 min)", onClick = viewModel::startGuidedTest)
+                Gap(8.dp)
+                SecondaryButton("Record session (battery / heat)", onClick = viewModel::startFreeRecording)
+            } else {
+                SecondaryButton("Stop recording", onClick = viewModel::stopRecording)
+            }
+            state.lastSessionMessage?.let {
+                Gap(8.dp)
+                Text(it, style = MaterialTheme.typography.bodySmall, color = muted)
+            }
+        }
+    }
+}
 
-/** Big instruction card during the guided test (the user follows it, the app knows the ground truth). */
+/** Big instruction card during the guided test (the user follows it from the desk, the app knows the truth). */
 @Composable
 private fun RecordingCard(recording: RecordingUi) {
-    if (recording.guided) {
-        val (title, color) = when (recording.stepKind) {
-            "good" -> "Sit straight" to Blue
-            "mild" -> "Slouch slightly" to Orange
-            "strong" -> "Slouch strongly" to Red
-            else -> "Get ready" to Grey
-        }
-        Column(
-            Modifier.fillMaxWidth().background(color, RoundedCornerShape(12.dp)).padding(12.dp),
-        ) {
+    if (!recording.guided) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StatusDot(StatusColors.Bad)
+            Spacer(Modifier.width(8.dp))
             Text(
-                "Guided test · step ${recording.stepNumber}/${recording.stepCount} · ${recording.secondsLeftInStep} s left",
-                color = Color.White, style = MaterialTheme.typography.bodyMedium,
+                fmt("Recording %s · %,d frames", formatClock(recording.elapsedSeconds.toLong()), recording.frames),
+                style = MaterialTheme.typography.titleSmall,
             )
-            Text(title, color = Color.White, style = MaterialTheme.typography.headlineMedium)
-            Text(recording.instruction, color = Color.White, style = MaterialTheme.typography.bodyMedium)
         }
-    } else {
-        Text(
-            fmt("● Recording %d:%02d · %d frames", recording.elapsedSeconds / 60, recording.elapsedSeconds % 60, recording.frames),
-            color = Red, style = MaterialTheme.typography.titleMedium,
-        )
+        return
     }
-    Spacer(Modifier.height(8.dp))
+    val (title, background) = when (recording.stepKind) {
+        "good" -> "Sit straight" to StatusColors.Good
+        "mild" -> "Slouch slightly" to StatusColors.Warning
+        "strong" -> "Slouch strongly" to StatusColors.Bad
+        else -> "Get ready" to Grey700
+    }
+    val content = if (background == StatusColors.Warning) Black else White
+    Panel(Modifier.fillMaxWidth(), color = background, contentColor = content) {
+        Column {
+            SectionLabel(
+                "Guided test · step ${recording.stepNumber}/${recording.stepCount} · ${recording.secondsLeftInStep} s left",
+                color = content.copy(alpha = 0.8f),
+            )
+            Gap(4.dp)
+            Text(title, style = MaterialTheme.typography.headlineLarge, color = content)
+            Text(recording.instruction, style = MaterialTheme.typography.bodyMedium, color = content.copy(alpha = 0.85f))
+        }
+    }
 }
 
-@Composable
-private fun RecordingControls(state: MonitorUiState, viewModel: MonitorViewModel) {
-    Text("Step 6: real test", style = MaterialTheme.typography.titleSmall)
-    if (state.recording == null) {
-        Button(onClick = viewModel::startGuidedTest) { Text("Start guided test (5 min)") }
-        OutlinedButton(onClick = viewModel::startFreeRecording) { Text("Record session (battery / heat)") }
-    } else {
-        OutlinedButton(onClick = viewModel::stopRecording) { Text("Stop recording") }
-    }
-    state.lastSessionMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-}
+private fun fmt(format: String, vararg args: Any) = String.format(Locale.US, format, *args)

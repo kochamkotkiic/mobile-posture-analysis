@@ -8,7 +8,10 @@
     <!-- Cloud: /predict, accounts, alerts (only the 9 numbers are sent, never images) -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- networkSecurityConfig: plain http:// only to the local dev server (emulator 10.0.2.2, localhost);
+         the deployed Cloud Run server uses https. See res/xml/network_security_config.xml. -->
     <application
+        android:networkSecurityConfig="@xml/network_security_config"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

@@ -31,7 +31,23 @@ Full plan, decisions and team split: `../.claude/skills/posture-mobile/SKILL.md`
   - `remote/`: `RemoteClassifier` (cloud `/predict`), latency logging
   - `calibration/`: `CalibrationManager`, `CalibrationRepository` (DataStore)
   - `alert/`: `AlertManager`
+  - `settings/`: `SettingsRepository` (DataStore): classifier mode, server URL, developer tools switch
+  - `cloud/`: `CloudApi` (HttpURLConnection + org.json, no extra libraries) for Nuno's API
+    (`cloud/README.md`): `/me`, `/friends`, `/alerts`, `/tasks`. Base URL = the server address setting.
+  - `challenge/`: `ChallengeRecorder` (plain Kotlin, unit-tested): 3 s countdown + 5 s recording of the
+    normalized features from `MonitorViewModel.challengeFrames` (read-only hook). The cloud judges them (D3).
+    `ui/friends/ChallengeViewModel` checks the server every 15 s for challenges and answers (until FCM push).
+  - `account/`: `AccountRepository`, the signed-in user. For now a **test sign-in** for a server started with
+    `DEV_AUTH=true` (token `dev:<uid>:<email>`); swap in Firebase Auth later without changing callers.
   - `ui/`: Compose screens + `ui/theme/`
+    - `ui/theme/`: monochrome theme (black/white/greys); colour only for status (`StatusColors`). No dynamic colour.
+    - `ui/components/`: shared building blocks (`PrimaryButton`, `SecondaryButton`, `Panel`, `StatTile`, ...).
+      Use these instead of raw Material buttons so all screens look the same.
+    - Screens: `welcome/` (first launch), `calibration/`, `monitor/` (home), `settings/` and `friends/`
+      (layers over the monitor, so monitoring keeps running while they are open).
+      Landscape layout everywhere: camera card on the left, content panel on the right.
+    - Developer/evaluation tools (FPS, test mode, guided test, recording) are shown only when
+      "Developer tools" is on in Settings; keep them working, they are needed for Step 9.
   - `selftest/`: Step 1 checkpoint, temporary (delete when the real screens exist)
 - `app/src/main/assets/`: `pose_landmarker_full.task`, `posture_model.onnx`, `onnx_test_cases.json`.
   **Copies** of `../models/`; the source of truth is `../models/` (produced by `../src/export/`).

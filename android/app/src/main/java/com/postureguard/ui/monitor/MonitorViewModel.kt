@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.postureguard.alert.AlertManager
 import com.postureguard.calibration.CalibrationRepository
 import com.postureguard.camera.FrameAnalyzer
+import com.postureguard.challenge.ChallengeFrame
 import com.postureguard.pose.Landmark
 import com.postureguard.pose.PoseDetector
 import com.postureguard.pose.PoseFrame
@@ -19,6 +20,8 @@ import com.postureguard.posture.PosturePipeline
 import com.postureguard.posture.PostureState
 import com.postureguard.posture.FeatureExtractor
 import com.postureguard.posture.Prediction
+import com.postureguard.posture.SessionStats
+import com.postureguard.posture.SessionSummary
 import com.postureguard.session.BatteryReader
 import com.postureguard.session.FrameRecord
 import com.postureguard.session.GuidedScenario
@@ -74,6 +77,8 @@ data class MonitorUiState(
     val recording: RecordingUi? = null,
     /** Where the last recorded session was saved (shown on screen). */
     val lastSessionMessage: String? = null,
+    /** Tracked time, good share and alerts since monitoring started (monitor screen tiles). */
+    val session: SessionSummary = SessionSummary(),
 ) {
     val alertAfterMs: Long get() = if (testMode) MonitorViewModel.TEST_ALERT_MS else MonitorViewModel.ALERT_MS
 }
@@ -98,6 +103,13 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
     val postureState: StateFlow<PostureState?> = _postureState.asStateFlow()
     private val _events = MutableSharedFlow<PostureEvent>(extraBufferCapacity = 16)
     val events: SharedFlow<PostureEvent> = _events.asSharedFlow()
+
+    /**
+     * Read-only hook for the friend challenge (Zenon): every processed frame, with the features minus calibration
+     * on the frames where the model ran (~5x/s). Nothing here changes the monitoring itself.
+     */
+    private val _challengeFrames = MutableSharedFlow<ChallengeFrame>(extraBufferCapacity = 64)
+    val challengeFrames: SharedFlow<ChallengeFrame> = _challengeFrames.asSharedFlow()
 
     val alertVisible: StateFlow<Boolean> = alertManager.alertVisible
 
@@ -140,6 +152,7 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
     private val classificationTimes = ArrayDeque<Long>()
     private var classifyMsAvg = 0.0
     private var lastLogMs = 0L
+    private val sessionStats = SessionStats()
 
     // Step 6 recording, only touched by the processing coroutine
     private val batteryReader = BatteryReader(application)
@@ -172,6 +185,8 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
                         Input.Reset -> {
                             stopRecording("Recording stopped.")
                             pipeline.reset()
+                            sessionStats.reset()
+                            _state.update { it.copy(session = sessionStats.current) }
                         }
                         is Input.StartRecording -> startRecording(pipeline, input.guided)
                         Input.StopRecording -> stopRecording("Recording stopped.")
@@ -221,9 +236,20 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
         result?.update?.events?.forEach { event ->
             Log.i(TAG, "Event: $event")
             alertManager.onEvent(event)
+            sessionStats.onEvent(event)
             _events.tryEmit(event)
         }
         _postureState.value = result?.update?.state
+        sessionStats.onFrame(frame.timestampMs, result?.update?.state)
+        if (_challengeFrames.subscriptionCount.value > 0) {
+            val visible = result?.update?.state?.personVisible == true
+            // Every frame with a person in view (not only the ~5/s the model ran on): slow devices such as the
+            // emulator (~3 FPS) would otherwise not reach the server's minimum of 15 samples in 5 s.
+            val normalized = if (visible) {
+                pipeline.calibration?.let { cal -> frame.landmarks?.let { cal.normalize(FeatureExtractor.extract(it)) } }
+            } else null
+            _challengeFrames.tryEmit(ChallengeFrame(frame.timestampMs, visible, normalized))
+        }
 
         _state.update {
             it.copy(
@@ -237,6 +263,7 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
                 poseFps = rate(frameTimes),
                 classificationsPerSecond = rate(classificationTimes),
                 classifyMs = classifyMsAvg,
+                session = sessionStats.current,
             )
         }
         logOncePerSecond(frame.timestampMs)

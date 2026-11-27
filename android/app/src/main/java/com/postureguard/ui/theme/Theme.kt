@@ -1,58 +1,89 @@
 package com.postureguard.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+/*
+ * Minimal monochrome look: black on white (light) / white on black (dark).
+ * No dynamic (wallpaper) colours on purpose, so the app looks the same on every phone and the
+ * only colours on screen are the status colours (green good / red bad).
+ */
+
+private val LightColors = lightColorScheme(
+    primary = Black,
+    onPrimary = White,
+    primaryContainer = Black,
+    onPrimaryContainer = White,
+    secondary = Grey500,
+    onSecondary = White,
+    secondaryContainer = Grey100,
+    onSecondaryContainer = Black,
+    background = White,
+    onBackground = Black,
+    surface = White,
+    onSurface = Black,
+    surfaceVariant = Grey50,
+    onSurfaceVariant = Grey500,
+    surfaceContainerHighest = Grey100,
+    surfaceContainerHigh = Grey50,
+    surfaceContainer = Grey50,
+    surfaceContainerLow = Grey50,
+    surfaceContainerLowest = White,
+    outline = Grey300,
+    outlineVariant = Grey100,
+    error = StatusColors.Bad,
+    onError = White,
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+private val DarkColors = darkColorScheme(
+    primary = White,
+    onPrimary = Black,
+    primaryContainer = White,
+    onPrimaryContainer = Black,
+    secondary = Grey500,
+    onSecondary = Black,
+    secondaryContainer = Grey700,
+    onSecondaryContainer = White,
+    background = Black,
+    onBackground = White,
+    surface = Black,
+    onSurface = White,
+    surfaceVariant = Grey800,
+    onSurfaceVariant = Grey500,
+    surfaceContainerHighest = Grey700,
+    surfaceContainerHigh = Grey800,
+    surfaceContainer = Grey800,
+    surfaceContainerLow = Grey900,
+    surfaceContainerLowest = Black,
+    outline = Grey700,
+    outlineVariant = Grey800,
+    error = StatusColors.Bad,
+    onError = White,
+)
 
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp),
 )
 
 @Composable
 fun PostureGuardTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = Typography,
-        content = content
+        shapes = AppShapes,
+        content = content,
     )
 }
